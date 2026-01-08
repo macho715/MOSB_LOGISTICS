@@ -1,0 +1,8 @@
+---
+description: Bind docs/AGENTS.md as operational agent spec
+globs: ["docs/AGENTS.md", "**/*"]
+alwaysApply: true
+---
+
+- `docs/AGENTS.md` defines agent roles, architecture expectations, and repo reality snapshot.
+- If repo structure differs, update `docs/AGENTS.md` to match.

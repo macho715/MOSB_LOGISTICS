@@ -1,0 +1,9 @@
+---
+description: Modern Python 3.13 patterns
+globs: ["src/**/*.py", "tests/**/*.py"]
+alwaysApply: true
+---
+
+- Prefer stdlib-first, lazy imports where beneficial.
+- Use pyupgrade --py313-plus compatible idioms.
+- Avoid unnecessary classes; keep functions pure where practical.

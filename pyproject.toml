@@ -1,0 +1,27 @@
+[project]
+name = "cursor-full-option-pack"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers --maxfail=1"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85.00
+precision = 2
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+fix = true
+show-fixes = true
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black"

@@ -1,0 +1,12 @@
+---
+description: Logistics domain defaults (HVDC / ops)
+globs: ["**/*"]
+alwaysApply: false
+---
+
+- Use logistics terms precisely: 3PL/WMS/Incoterms/HS/berth/DEM-DET/stowage.
+- Default risk triggers (guideline):
+  - ΔRate > 10.00% → cost overrun risk
+  - ETA delay > 24.00h → OTIF risk
+  - Deck pressure > 4.00 t/m² → stowage risk
+  - Cert expiry < 30d → compliance risk (MOIAT/FANR human gate)

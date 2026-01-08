@@ -1,0 +1,3 @@
+shpt_no,bl_no,incoterm,hs_code,priority,vendor
+SHPT-AGI-0001,BL-TBD,DAP,TBD,HIGH,DSV
+SHPT-DAS-0001,BL-TBD,CIF,TBD,MED,DSV

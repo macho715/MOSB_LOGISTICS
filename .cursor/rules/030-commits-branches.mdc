@@ -1,0 +1,10 @@
+---
+description: Git workflow & commit message discipline
+globs: [".git/**", "**/*"]
+alwaysApply: true
+---
+
+- Conventional Commits (e.g., feat:, fix:, chore:, docs:, refactor:, test:).
+- Trunk-based: main + short-lived feature/* branches.
+- PR gates: CODEOWNERS approvals ≥ 2; CI must be green.
+- Separate commits for structural vs behavioral changes when possible.

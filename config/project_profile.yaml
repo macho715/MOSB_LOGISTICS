@@ -1,0 +1,17 @@
+project:
+  topic: Full-option Cursor Setup
+  domain: logistics
+  timezone: Asia/Dubai
+  python: '3.13'
+  owners:
+  - '@your-org/owner1'
+  - '@your-org/owner2'
+quality_gates:
+  coverage_min: 85.0
+  lint_zero_warn: true
+  bandit_high_zero: true
+  pip_audit_strict: true
+autonomy:
+  mode: high
+  default_behavior: implement_without_confirmation
+  fail_safe: ZERO_table

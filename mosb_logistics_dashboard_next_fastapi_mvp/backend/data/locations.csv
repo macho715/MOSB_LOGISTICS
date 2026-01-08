@@ -1,0 +1,9 @@
+location_id,type,name,lat,lon
+MOSB_ESNAAD,MOSB,MOSB - Samsung HVDC Lightning Project Esnaad,24.328853,54.45857
+DSV_M19,WH,DSV Warehouse (Musaffah M19),24.3668127,54.4764805
+MIRFA_ONSHORE,SITE,MIR (Mirfa - reference),24.121,53.447
+SHU_ONSHORE,SITE,SHU (Shuweihat - reference),24.156936,52.569199
+AGI_OFFSHORE,SITE,AGI (offshore - reference),24.8429,53.6563
+DAS_OFFSHORE,SITE,DAS (Das Island - reference),25.151385,52.873894
+PORT_MZ,PORT,Port (Mina Zayed - reference),24.522483,54.387718
+BERTH_MZ,BERTH,Berth (Mina Zayed - reference),24.522483,54.387718

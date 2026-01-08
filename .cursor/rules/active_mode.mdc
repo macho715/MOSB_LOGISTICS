@@ -1,0 +1,8 @@
+---
+description: Cursor workspace activation policy (tabs/docs)
+globs: ["**/*"]
+alwaysApply: true
+---
+
+- Open on start: docs/Cursor_Project_AutoSetup_Guide.md, docs/AGENTS.md, docs/constitution.md, plan.md
+- Maintain: Docs / Rules / Git / Terminals workflow.

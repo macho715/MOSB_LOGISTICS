@@ -1,0 +1,10 @@
+---
+description: SoT=plan.md, TDD loop, tidy-first commit discipline
+globs: ["src/**", "tests/**", "plan.md"]
+alwaysApply: true
+---
+
+- SoT is `plan.md`. When user says **go**, select the next unchecked test only.
+- Execute RED → GREEN → REFACTOR.
+- Tidy First: structural change and behavioral change must be separated.
+- Test SLA targets (guideline): unit ≤ 0.20s; integration ≤ 2.00s; e2e ≤ 5m.

@@ -1,0 +1,11 @@
+preload_docs:
+  - path: "docs/Cursor_Project_AutoSetup_Guide.md"
+    open_on_start: true
+  - path: "docs/AGENTS.md"
+    open_on_start: true
+  - path: "docs/constitution.md"
+    open_on_start: true
+  - path: "plan.md"
+    open_on_start: true
+  - path: "config/project_profile.yaml"
+    open_on_start: true

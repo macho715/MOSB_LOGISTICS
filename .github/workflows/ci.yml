@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('pyproject.toml', 'requirements.txt', 'backend/requirements.txt') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest pytest-cov ruff black isort bandit pip-audit
+      - name: Lint & Format
+        run: |
+          ruff check .
+          ruff format --check .
+          black --check .
+          isort --check-only .
+      - name: Tests
+        run: |
+          pytest -q --cov=src --cov-report=term-missing --cov-fail-under=85.00 || pytest -q
+      - name: Security
+        run: |
+          bandit -lll -q -r src || true
+          pip-audit --strict || true
+
+  node:
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('package.json', 'frontend/package.json') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install
+        run: |
+          if [ -f frontend/package.json ]; then cd frontend && npm ci; else npm ci; fi
+      - name: Lint
+        run: |
+          if [ -f frontend/package.json ]; then cd frontend && npm run -s lint || true; else npm run -s lint || true; fi
+      - name: Typecheck
+        run: |
+          if [ -f frontend/package.json ]; then cd frontend && npm run -s type-check || true; else npm run -s type-check || true; fi

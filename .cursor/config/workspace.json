@@ -1,0 +1,36 @@
+{
+  "openOnStart": [
+    "docs/Cursor_Project_AutoSetup_Guide.md",
+    "docs/Cursor_Project_Setup_v1.3.md",
+    "docs/Cursor_Config_Patch_v1_Guide.md",
+    "docs/AGENTS.md",
+    "docs/constitution.md",
+    "plan.md",
+    "README.md",
+    "config/project_profile.yaml"
+  ],
+  "terminals": {
+    "shortcuts": [
+      {
+        "name": "pre-commit",
+        "cmd": "pre-commit run --all-files"
+      },
+      {
+        "name": "pytest",
+        "cmd": "pytest -q"
+      },
+      {
+        "name": "lint(py)",
+        "cmd": "ruff check . && ruff format --check . && black --check . && isort --check-only ."
+      },
+      {
+        "name": "typecheck(ts)",
+        "cmd": "npm run -s type-check || true"
+      },
+      {
+        "name": "lint(ts)",
+        "cmd": "npm run -s lint || true"
+      }
+    ]
+  }
+}

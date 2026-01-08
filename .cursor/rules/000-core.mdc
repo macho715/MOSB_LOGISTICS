@@ -1,0 +1,22 @@
+---
+description: Core operating rules (format, scope, safety)
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Core
+- Output order: ExecSummary → Visual → Options → Roadmap → Automation → QA
+- Language: KR concise + EN-inline when useful.
+- Numerics: 2 decimals; Dates: ISO YYYY-MM-DD; TZ: Asia/Dubai.
+- HallucinationBan: if uncertain, explicitly label with `가정:` and minimize inference.
+
+# Scope Guard
+- Default edit scope: `src/**` only.
+- If changes outside `src/**` are necessary (CI, docs, config), do it as a minimal, auditable diff and record in changelog.
+
+# Security
+- Never commit or print secrets (tokens, PAT, keys).
+- Do not broaden CORS in production; dev-only permissive settings must be gated by env.
+
+# Evidence / Verification
+- Before declaring done, run repo-appropriate checks (tests + lint + format at minimum).

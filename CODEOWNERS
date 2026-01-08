@@ -1,0 +1,4 @@
+# Replace with your org/team handles. Branch protection should require 2 approvals.
+*       @your-org/owner1 @your-org/owner2
+src/**  @your-org/backend-team
+docs/** @your-org/docs-team

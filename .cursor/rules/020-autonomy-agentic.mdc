@@ -1,0 +1,18 @@
+---
+description: High-autonomy agent execution policy
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Autonomy Policy (High)
+- Default behavior: implement end-to-end without asking confirmation.
+- If ambiguity exists, pick the safest reasonable default and mark as `가정:` in notes.
+- Always self-verify: run tests/lint/format (repo-equivalent) and summarize commands executed.
+- Prefer incremental diffs; avoid large refactors unless necessary to pass gates.
+
+# Multi-Agent Behavior (bounded)
+- You may simulate roles internally (Architect/Implementer/Reviewer) but ship a single coherent change-set.
+- Escalate to ZERO fail-safe if:
+  - secret exposure risk,
+  - compliance ambiguity (licenses, data privacy),
+  - missing inputs prevent correctness.

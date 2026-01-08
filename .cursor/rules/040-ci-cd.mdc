@@ -1,0 +1,10 @@
+---
+description: CI quality/security gates
+globs: [".github/workflows/**", ".pre-commit-config.yaml", "pyproject.toml", "package.json", "**/*"]
+alwaysApply: true
+---
+
+- Coverage gate (Python paths if present): ≥ 85.00%.
+- Lint/format: 0 warnings (ruff/black/isort for Python; eslint/tsc for TS where configured).
+- Security: bandit High=0, pip-audit --strict pass (Python); secret scanning enabled.
+- Pipeline runtime target: ≤ 5m (optimize if exceeded).

@@ -1,0 +1,9 @@
+---
+description: Python conventions (3.13) + Excel IO policy
+globs: ["src/**/*.py", "tests/**/*.py", "pyproject.toml"]
+alwaysApply: true
+---
+
+- Python: 3.13 target.
+- Excel: new files via XlsxWriter; edits via openpyxl; pandas as IO layer.
+- Prefer type hints; avoid heavy dependencies unless necessary.

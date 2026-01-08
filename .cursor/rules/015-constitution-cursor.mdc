@@ -1,0 +1,8 @@
+---
+description: Bind docs/constitution.md as policy source
+globs: ["docs/constitution.md", "**/*"]
+alwaysApply: true
+---
+
+- `docs/constitution.md` is the governing document.
+- If a rule conflict exists, repo reality wins; update constitution and note the change.
