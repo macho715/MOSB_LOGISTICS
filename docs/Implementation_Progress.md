@@ -426,3 +426,78 @@ feat: add server management script and fix frontend user cache crash
 - **2026-01-09**: Frontend 사용자 캐시 크래시 수정 (`user?.role`)
 - **2026-01-09**: 프로젝트 문서 추가 (CHANGELOG, 릴리스 노트, 서버 운영 가이드)
 - **2026-01-09**: Git diff 변경사항 로컬 적용 및 검증 완료
+
+---
+
+## Phase 3.3 Map 초기화 및 WebGL 오류 수정
+
+**완료일**: 2026-01-10
+**상태**: ✅ 완료
+
+### 구현 내용
+
+#### 1. Map Container 초기화 오류 수정
+- **문제**: "Container 'map' not found" 오류
+- **원인**: `useEffect`가 DOM 요소 렌더링 전 실행
+- **해결**: `useRef`를 사용한 DOM 요소 참조
+- **위치**: `frontend/pages/index.tsx`
+
+#### 2. WebGL 컨텍스트 초기화 오류 수정
+- **문제**: `maxTextureDimension2D` 오류
+- **원인**: DeckGL이 WebGL 컨텍스트 준비 전 초기화
+- **해결**: `isMapReady` 상태로 DeckGL 조건부 렌더링
+- **위치**: `frontend/pages/index.tsx`
+
+#### 3. MapLibre 초기화 로직 개선
+- **문제**: Map이 표시되지 않음
+- **원인**:
+  - MapLibre useEffect가 `[]` 의존성으로 user 로그인 전 실행
+  - `isMapReady`가 MapLibre `load` 이벤트 전 설정
+  - MapLibre CSS import 누락
+- **해결**:
+  - useEffect 의존성에 `user` 추가
+  - MapLibre `load` 이벤트에서 `isMapReady` 설정
+  - `_app.tsx`에 MapLibre CSS import 추가
+
+#### 4. Next.js 16 업데이트
+- Next.js: `14.2.0` → `^16.1.1`
+- ESLint: `^8.0.0` → `^9.39.2`
+- eslint-config-next: `^14.2.0` → `^16.1.1`
+
+#### 5. 디버그 파일 정리
+- `Untitled-1.ini` 제거
+- `.gitignore`에 디버그 파일 패턴 추가
+
+### 변경된 파일
+
+1. `frontend/pages/index.tsx`
+   - MapLibre 초기화 로직 개선
+   - `mapContainerRef`, `mapRef` 추가
+   - `isMapReady` 상태 추가
+   - DeckGL 조건부 렌더링
+
+2. `frontend/pages/_app.tsx`
+   - MapLibre CSS import 추가
+
+3. `frontend/package.json`
+   - Next.js 16 업데이트
+   - ESLint 업데이트
+
+4. `.gitignore`
+   - 디버그 파일 패턴 추가
+
+### 테스트 결과
+
+- ✅ Map container 초기화 오류 해결
+- ✅ WebGL 오류 해결
+- ⏳ Map 표시 테스트 진행 중
+
+### 변경 이력
+
+- **2026-01-10**: Map 초기화 및 WebGL 오류 수정
+- **2026-01-10**: Next.js 16 업데이트
+- **2026-01-10**: 디버그 파일 정리
+- **2026-01-09**: 서버 관리 스크립트 추가 (`start-servers.ps1`)
+- **2026-01-09**: Frontend 사용자 캐시 크래시 수정 (`user?.role`)
+- **2026-01-09**: 프로젝트 문서 추가 (CHANGELOG, 릴리스 노트, 서버 운영 가이드)
+- **2026-01-09**: Git diff 변경사항 로컬 적용 및 검증 완료

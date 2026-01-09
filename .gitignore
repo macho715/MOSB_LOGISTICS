@@ -66,3 +66,7 @@ logs/
 *.temp
 .cache/
 
+# Debug/untitled files
+Untitled-*.ini
+Untitled-*.txt
+*.ini.bak

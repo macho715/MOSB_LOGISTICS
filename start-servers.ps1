@@ -70,16 +70,16 @@ function Stop-ServerOnPort {
     $pids = Check-Port $Port
     if ($pids.Count -gt 0) {
         Write-ColorOutput Yellow "⚠️  $ServerName (포트 $Port) 실행 중인 프로세스 발견: $($pids -join ', ')"
-        foreach ($pid in $pids) {
+        foreach ($processId in $pids) {
             try {
-                $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
                 if ($proc) {
-                    Write-ColorOutput Gray "   프로세스 종료 중: $pid ($($proc.ProcessName))"
-                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                    Write-ColorOutput Gray "   프로세스 종료 중: $processId ($($proc.ProcessName))"
+                    Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
                     Start-Sleep -Milliseconds 500
                 }
             } catch {
-                Write-ColorOutput Yellow "   경고: 프로세스 $pid 종료 실패 (이미 종료되었을 수 있음)"
+                Write-ColorOutput Yellow "   경고: 프로세스 $processId 종료 실패 (이미 종료되었을 수 있음)"
             }
         }
         Start-Sleep -Seconds 1
@@ -276,4 +276,4 @@ if ($frontendStarted) {
 }
 
 Write-ColorOutput Yellow "`n💡 서버 종료: Ctrl+C 또는 작업 관리자에서 프로세스 종료"
-Write-ColorOutput ""
+Write-Output ""
