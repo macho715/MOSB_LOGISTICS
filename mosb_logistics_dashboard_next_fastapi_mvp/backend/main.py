@@ -91,6 +91,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_log() -> None:
+    """KR: 앱 시작 로그를 남깁니다. EN: Log application startup."""
+    logger.info("MOSB Logistics API startup")
+
+@app.on_event("shutdown")
+async def shutdown_cleanup() -> None:
+    """KR: 앱 종료 시 DB 연결을 닫습니다. EN: Close DB connection on shutdown."""
+    logger.info("MOSB Logistics API shutdown")
+    try:
+        db.close()
+    except Exception as exc:
+        logger.warning("DB close failed on shutdown: %s", exc)
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
