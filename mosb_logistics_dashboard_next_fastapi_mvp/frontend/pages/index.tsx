@@ -196,7 +196,7 @@ export default function Home() {
 
   const shpts = Array.from(latestByShipment.keys()).sort();
   const selectedEvents = events.filter(e => e.shpt_no === selected).slice(0, 20);
-  const canPostDemo = user.role === "OPS" || user.role === "ADMIN";
+  const canPostDemo = user?.role === "OPS" || user?.role === "ADMIN";
 
   const handleLoginSuccess = () => {
     const cached = AuthService.getCachedUser();
