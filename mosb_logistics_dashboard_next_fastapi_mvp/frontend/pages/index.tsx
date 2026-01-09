@@ -3,7 +3,9 @@ import DeckGL from "@deck.gl/react";
 import { ScatterplotLayer, ArcLayer } from "@deck.gl/layers";
 import maplibregl from "maplibre-gl";
 
+import { AuthService, User } from "../lib/auth";
 import { LogisticsAPI } from "../lib/api";
+import { Login } from "../components/Login";
 import { useWebSocket } from "../hooks/useWebSocket";
 import type { Event, Location } from "../types/logistics";
 
@@ -51,12 +53,42 @@ const initialViewState = {
 };
 
 export default function Home() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [selected, setSelected] = useState<string>("");
 
   useEffect(() => {
     let active = true;
+    const initAuth = async () => {
+      if (!AuthService.isAuthenticated()) {
+        if (active) setAuthReady(true);
+        return;
+      }
+      try {
+        const me = await AuthService.getCurrentUser();
+        if (!active) return;
+        setUser(me);
+      } catch (err) {
+        if (!active) return;
+        setAuthError(err instanceof Error ? err.message : "Auth failed");
+      } finally {
+        if (active) setAuthReady(true);
+      }
+    };
+    void initAuth();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!user) return () => {
+      active = false;
+    };
     const load = async () => {
       try {
         const [locs, evs] = await Promise.all([
@@ -67,19 +99,26 @@ export default function Home() {
         setLocations(locs || []);
         setEvents(evs || []);
         if ((evs || []).length > 0) setSelected((evs[0]?.shpt_no) || "");
-      } catch {
-        // Ignore initial load errors for demo resilience.
+      } catch (err) {
+        if (!active) return;
+        const message = err instanceof Error ? err.message : "Failed to load data";
+        setAuthError(message);
+        if (message.toLowerCase().includes("authentication")) {
+          AuthService.logout();
+          setUser(null);
+        }
       }
     };
     void load();
     return () => {
       active = false;
     };
-  }, []);
+  }, [user]);
 
   const handleWsEvent = useCallback((event: Event) => {
+    if (!user) return;
     setEvents(prev => [event, ...prev].slice(0, 500));
-  }, []);
+  }, [user]);
 
   useWebSocket(handleWsEvent);
 
@@ -157,6 +196,45 @@ export default function Home() {
 
   const shpts = Array.from(latestByShipment.keys()).sort();
   const selectedEvents = events.filter(e => e.shpt_no === selected).slice(0, 20);
+  const canPostDemo = user.role === "OPS" || user.role === "ADMIN";
+
+  const handleLoginSuccess = () => {
+    const cached = AuthService.getCachedUser();
+    if (cached) {
+      setUser(cached);
+      setAuthError(null);
+    } else {
+      setAuthError("Login succeeded but user cache missing");
+    }
+  };
+
+  const handleLogout = () => {
+    AuthService.logout();
+    setUser(null);
+    setLocations([]);
+    setEvents([]);
+    setSelected("");
+    setAuthError(null);
+  };
+
+  if (!authReady) {
+    return (
+      <div style={{ padding: 16 }}>
+        <div className="small">Authenticating...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div style={{ padding: 16 }}>
+        {authError && (
+          <div style={{ color: "#ff6b6b", marginBottom: 12 }}>{authError}</div>
+        )}
+        <Login onLoginSuccess={handleLoginSuccess} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 16 }}>
@@ -164,6 +242,24 @@ export default function Home() {
         <div style={{ fontSize: 18, fontWeight: 700 }}>MOSB Logistics Live Map (Next.js + Deck.gl)</div>
         <div className="small">sleek UI / real-time-ready</div>
       </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+        <div className="small">Signed in as {user.username} ({user.role})</div>
+        <button
+          onClick={handleLogout}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: "rgba(255,255,255,0.06)",
+            color: "#e6edf3",
+          }}
+        >
+          Logout
+        </button>
+      </div>
+      {authError && (
+        <div style={{ color: "#ff6b6b", marginTop: 10 }}>{authError}</div>
+      )}
 
       <div className="kpi">
         <div className="card"><div className="small">Planned</div><div className="big">{kpis.PLANNED || 0}</div></div>
@@ -210,10 +306,16 @@ export default function Home() {
           <div style={{ marginTop: 12 }}>
             <button
               onClick={() => void LogisticsAPI.postDemoEvent()}
+              disabled={!canPostDemo}
               style={{ width: "100%", padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "#e6edf3" }}
             >
               Demo: Push Event (backend)
             </button>
+            {!canPostDemo && (
+              <div className="small" style={{ marginTop: 6 }}>
+                Demo event is restricted to OPS/ADMIN roles.
+              </div>
+            )}
             <div className="small" style={{ marginTop: 6 }}>For production: replace demo endpoint with WMS/ERP/GPS/Port feeds.</div>
           </div>
         </div>

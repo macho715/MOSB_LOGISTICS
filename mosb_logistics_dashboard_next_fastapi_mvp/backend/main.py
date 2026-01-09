@@ -7,14 +7,23 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Type
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
 from cache import CacheManager
 from db import Database
 from models import Event, Leg, Location, Shipment
+from auth import (
+    authenticate_user,
+    create_access_token,
+    get_current_user,
+    Token,
+    User,
+)
+from rbac import require_role
 
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(os.path.dirname(__file__), "data"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -97,8 +106,26 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content={"error": exc.detail},
     )
 
+@app.post("/api/auth/login", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(
+        data={"sub": user.username, "role": user.role},
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/auth/me", response_model=User)
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
 @app.get("/api/locations", response_model=list[Location])
-def get_locations():
+def get_locations(current_user: User = Depends(get_current_user)):
     cached = cache.get_cached_locations()
     if cached is not None:
         return cached
@@ -112,7 +139,7 @@ def get_locations():
     return locations
 
 @app.get("/api/legs", response_model=list[Leg])
-def get_legs():
+def get_legs(current_user: User = Depends(get_current_user)):
     cached = cache.get_cached_legs()
     if cached is not None:
         return cached
@@ -126,7 +153,7 @@ def get_legs():
     return legs
 
 @app.get("/api/shipments", response_model=list[Shipment])
-def get_shipments():
+def get_shipments(current_user: User = Depends(require_role(["OPS", "FINANCE", "ADMIN"]))):
     cached = cache.get_cached_shipments()
     if cached is not None:
         return cached
@@ -140,7 +167,7 @@ def get_shipments():
     return shipments
 
 @app.get("/api/events", response_model=list[Event])
-def get_events(since: Optional[str] = None):
+def get_events(since: Optional[str] = None, current_user: User = Depends(get_current_user)):
     cache_key = f"events:{since or 'all'}"
     cached = cache.get_cached_events(cache_key)
     if cached is not None:
@@ -212,7 +239,7 @@ async def asyncio_sleep(sec: int):
     await asyncio.sleep(sec)
 
 @app.post("/api/events/demo")
-async def post_demo_event():
+async def post_demo_event(current_user: User = Depends(require_role(["OPS", "ADMIN"]))):
     """
     Demo endpoint: appends a synthetic IN_TRANSIT update and broadcasts to WS clients.
     Replace with real integrations (WMS/ERP/Email/OCR/GPS).

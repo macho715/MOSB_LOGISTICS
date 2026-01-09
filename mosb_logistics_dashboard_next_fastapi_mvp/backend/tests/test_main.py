@@ -9,9 +9,21 @@ from main import app
 
 client = TestClient(app)
 
+def get_token(username: str = "ops_user", password: str = "ops123") -> str:
+    response = client.post(
+        "/api/auth/login",
+        data={"username": username, "password": password},
+    )
+    assert response.status_code == 200
+    return response.json()["access_token"]
+
 
 def test_get_locations():
-    response = client.get("/api/locations")
+    token = get_token()
+    response = client.get(
+        "/api/locations",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
@@ -21,31 +33,51 @@ def test_get_locations():
 
 
 def test_get_shipments():
-    response = client.get("/api/shipments")
+    token = get_token()
+    response = client.get(
+        "/api/shipments",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
 
 def test_get_legs():
-    response = client.get("/api/legs")
+    token = get_token()
+    response = client.get(
+        "/api/legs",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
 
 def test_get_events():
-    response = client.get("/api/events")
+    token = get_token()
+    response = client.get(
+        "/api/events",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
 
 def test_get_events_with_since():
-    response = client.get("/api/events?since=2026-01-01T00:00:00Z")
+    token = get_token()
+    response = client.get(
+        "/api/events?since=2026-01-01T00:00:00Z",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
 
 def test_post_demo_event():
-    response = client.post("/api/events/demo")
+    token = get_token()
+    response = client.post(
+        "/api/events/demo",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True

@@ -15,8 +15,10 @@
 4. [Phase 3 계획 수립](#phase-3-계획-수립)
 5. [Phase 3.1 구현 완료](#phase-31-구현-완료)
 6. [Phase 3.1 로컬 검증 결과](#phase-31-로컬-검증-결과)
-7. [Phase 3.1 상세 구현 가이드](#phase-31-상세-구현-가이드)
-8. [참고 자료](#참고-자료)
+7. [Phase 3.2 구현 완료](#phase-32-구현-완료)
+8. [Phase 3.2 테스트 검증 결과](#phase-32-테스트-검증-결과)
+9. [Phase 3.1 상세 구현 가이드](#phase-31-상세-구현-가이드)
+10. [참고 자료](#참고-자료)
 
 ---
 
@@ -27,6 +29,7 @@
 - **Frontend**: Next.js 14, React 18, Deck.gl 9, MapLibre 4
 - **Backend**: FastAPI, WebSocket
 - **데이터**: DuckDB with CSV fallback (Phase 3.1 완료)
+- **인증**: JWT + RBAC (Phase 3.2 완료)
 - **캐싱**: TTLCache (5min locations/shipments/legs, 1min events)
 - **스타일**: 다크 테마
 
@@ -35,7 +38,7 @@
 - **Locations**: 8개 (MOSB, WH, SITE×4, PORT, BERTH)
 - **Shipments**: 2개 (AGI, DAS)
 - **Legs**: 6개 (ROAD/SEA 구간)
-- **Events**: 5개 (원래 3개 + demo 2개)
+- **Events**: 6개 (원래 3개 + demo 3개)
 
 ### 프로젝트 구조
 
@@ -45,18 +48,25 @@ mosb_logistics_dashboard_next_fastapi_mvp/
 │   ├── types/
 │   │   └── logistics.ts          # 도메인 타입 정의
 │   ├── lib/
-│   │   └── api.ts                # API 클라이언트
+│   │   ├── api.ts                # API 클라이언트 (인증 헤더 포함)
+│   │   └── auth.ts               # 인증 서비스 (Phase 3.2)
+│   ├── components/
+│   │   └── Login.tsx             # 로그인 UI (Phase 3.2)
 │   ├── hooks/
 │   │   └── useWebSocket.ts       # WebSocket Hook
 │   └── pages/
-│       └── index.tsx              # 메인 페이지
+│       └── index.tsx              # 메인 페이지 (인증 통합)
 └── backend/
+    ├── auth.py                    # JWT 인증 (Phase 3.2)
+    ├── rbac.py                    # 역할 기반 접근 제어 (Phase 3.2)
     ├── db.py                      # DuckDB 통합 (Phase 3.1)
     ├── cache.py                   # 캐싱 레이어 (Phase 3.1)
     ├── models.py                  # Pydantic 모델
     ├── main.py                    # FastAPI 앱
     ├── tests/
+    │   ├── conftest.py            # pytest 설정 (Phase 3.2)
     │   ├── test_main.py           # API 테스트
+    │   ├── test_auth.py           # 인증 테스트 (Phase 3.2)
     │   ├── test_db.py             # DB 테스트 (Phase 3.1)
     │   └── test_cache.py          # 캐시 테스트 (Phase 3.1)
     └── data/
@@ -256,7 +266,7 @@ httpx>=0.24.0
 | 항목 | 목표 | 예상 시간 | 상태 |
 |------|------|----------|------|
 | 3.1 DB 준비 + 캐싱 | DuckDB 통합, 캐싱 레이어 | 1주 | ✅ 완료 |
-| 3.2 인증/인가 | JWT + RBAC | 1주 | 📋 대기 |
+| 3.2 인증/인가 | JWT + RBAC | 1주 | ✅ 완료 |
 | 3.3 성능 최적화 | 서버/클라이언트 캐싱, React 최적화 | 3-5일 | 📋 대기 |
 | 3.4 CI/CD 파이프라인 | GitHub Actions, Pre-commit | 3-5일 | 📋 대기 |
 
@@ -575,6 +585,213 @@ curl -X POST http://localhost:8000/api/events/demo
 
 ---
 
+## Phase 3.2 구현 완료
+
+**기간**: 1주
+**상태**: ✅ 완료 (2026-01-08)
+
+### 구현 내용
+
+#### 1. Backend JWT 인증 (`backend/auth.py`)
+
+**주요 기능**:
+- JWT 토큰 생성/검증 (python-jose)
+- 비밀번호 해싱 (passlib + bcrypt)
+- 사용자 인증 로직
+- 4개 데모 사용자 제공
+
+**데모 사용자**:
+- `ops_user / ops123` (OPS)
+- `finance_user / finance123` (FINANCE)
+- `compliance_user / compliance123` (COMPLIANCE)
+- `admin / admin123` (ADMIN)
+
+**주요 함수**:
+- `create_access_token()`: JWT 토큰 생성
+- `get_current_user()`: 토큰 검증 및 사용자 정보 반환
+- `authenticate_user()`: 사용자 인증
+
+#### 2. RBAC 데코레이터 (`backend/rbac.py`)
+
+**주요 기능**:
+- 역할 기반 접근 제어
+- `require_role()` 함수로 엔드포인트 보호
+- 일관된 권한 검사
+
+**사용 예시**:
+```python
+@app.get("/api/shipments")
+@require_role(["OPS", "FINANCE", "ADMIN"])
+async def get_shipments(current_user: User = Depends(get_current_user)):
+    ...
+```
+
+#### 3. Backend 엔드포인트 통합
+
+**인증 엔드포인트**:
+- `POST /api/auth/login`: 로그인 및 토큰 발급
+- `GET /api/auth/me`: 현재 사용자 정보
+
+**보호된 데이터 엔드포인트**:
+- `/api/locations`: 인증 필요 (모든 역할)
+- `/api/shipments`: OPS, FINANCE, ADMIN만 접근 가능
+- `/api/legs`: 인증 필요 (모든 역할)
+- `/api/events`: 인증 필요 (모든 역할)
+- `/api/events/demo`: OPS, ADMIN만 접근 가능
+
+#### 4. Frontend 인증 서비스 (`frontend/lib/auth.ts`)
+
+**주요 기능**:
+- 로그인/로그아웃
+- 토큰 관리 (localStorage)
+- 사용자 정보 캐싱
+- 역할 체크 헬퍼 (`hasRole`, `hasAnyRole`)
+- 브라우저 환경 체크 (SSR 호환)
+
+#### 5. Frontend 로그인 UI (`frontend/components/Login.tsx`)
+
+**특징**:
+- 다크 테마 디자인
+- 에러 처리
+- 로딩 상태 표시
+- 데모 사용자 안내
+
+#### 6. API 클라이언트 업데이트 (`frontend/lib/api.ts`)
+
+**변경사항**:
+- 모든 요청에 `Authorization: Bearer <token>` 헤더 추가
+- 401 에러 시 자동 로그아웃
+- 403 에러 처리 (권한 부족)
+
+#### 7. 메인 페이지 통합 (`frontend/pages/index.tsx`)
+
+**변경사항**:
+- 로그인 상태 확인
+- 미인증 시 로그인 화면 표시
+- 역할 기반 UI 제어 (예: Demo 이벤트 버튼)
+
+### 역할별 접근 권한
+
+| 역할 | Locations | Shipments | Legs | Events | Demo Event |
+|------|-----------|-----------|------|--------|------------|
+| OPS | ✅ | ✅ | ✅ | ✅ | ✅ |
+| FINANCE | ✅ | ✅ | ✅ | ✅ | ❌ |
+| COMPLIANCE | ✅ | ❌ | ✅ | ✅ | ❌ |
+| ADMIN | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+### 변경 파일
+
+- `backend/auth.py` (신규, 133줄)
+- `backend/rbac.py` (신규, 26줄)
+- `backend/main.py` (수정, +33/-6)
+- `backend/tests/test_auth.py` (신규, 79줄)
+- `backend/tests/test_main.py` (수정, +38/-6)
+- `backend/tests/conftest.py` (신규, pytest 설정)
+- `backend/requirements.txt` (+3: python-jose, passlib, python-multipart)
+- `backend/.env.example` (+3: JWT 관련 환경 변수)
+- `frontend/lib/auth.ts` (신규, 108줄)
+- `frontend/lib/api.ts` (수정, +60/-10)
+- `frontend/components/Login.tsx` (신규, 113줄)
+- `frontend/pages/index.tsx` (수정, +106/-4)
+- `docs/AGENTS.md` (업데이트)
+
+### 환경 변수 추가
+
+```bash
+# backend/.env.example
+JWT_SECRET_KEY=your-secret-key-change-in-prod
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+### 알려진 제한사항
+
+- **WebSocket 인증 미구현**: 현재 WebSocket은 인증 없이 접근 가능
+  - 향후 개선: 토큰 쿼리 파라미터 또는 subprotocol 검증 추가
+
+---
+
+## Phase 3.2 테스트 검증 결과
+
+**검증 일시**: 2026-01-08
+**검증 환경**: Windows, Python 3.13
+
+### 테스트 실행 결과
+
+#### 전체 테스트 통과 ✅
+
+```
+20 tests passed
+```
+
+#### 테스트 구성
+
+**인증 테스트** (`test_auth.py`):
+- ✅ `test_login_success`: 로그인 성공
+- ✅ `test_login_failure`: 로그인 실패 처리
+- ✅ `test_get_me_with_token`: 토큰으로 사용자 정보 조회
+- ✅ `test_protected_endpoint_without_token`: 토큰 없이 접근 거부
+- ✅ `test_protected_endpoint_with_token`: 토큰으로 접근 허용
+- ✅ `test_rbac_access_denied`: 권한 없는 역할 접근 거부
+
+**API 테스트** (`test_main.py`):
+- ✅ `test_get_locations`: Locations 엔드포인트
+- ✅ `test_get_shipments`: Shipments 엔드포인트
+- ✅ `test_get_legs`: Legs 엔드포인트
+- ✅ `test_get_events`: Events 엔드포인트
+- ✅ `test_get_events_with_since`: Events 필터링
+- ✅ `test_post_demo_event`: Demo 이벤트 생성
+
+**DB 테스트** (`test_db.py`):
+- ✅ `test_db_connection`: DB 연결
+- ✅ `test_db_get_locations`: Location 조회
+- ✅ `test_db_get_events_with_since`: Events 필터링
+- ✅ `test_db_append_event`: Event 추가
+
+**캐시 테스트** (`test_cache.py`):
+- ✅ `test_cache_hit`: 캐시 히트
+- ✅ `test_cache_miss`: 캐시 미스
+- ✅ `test_cache_ttl`: TTL 만료
+- ✅ `test_cache_invalidation`: 캐시 무효화
+
+### 개선 사항 적용
+
+#### 1. DeprecationWarning 제거 ✅
+
+**변경사항**:
+- `auth.py`의 `datetime.utcnow()` → `datetime.now(timezone.utc)` 변경
+- `timezone` import 추가
+
+**결과**:
+- DeprecationWarning 없음
+- 미래 Python 버전 호환성 확보
+
+#### 2. pytest import 문제 해결 ✅
+
+**변경사항**:
+- `backend/tests/conftest.py` 추가
+- Backend 디렉토리를 Python 경로에 자동 추가
+
+**결과**:
+- PYTHONPATH 설정 없이 테스트 실행 가능
+- `pytest -q` 명령어만으로 실행 가능
+
+### 검증 체크리스트
+
+- [x] JWT 인증 구현
+- [x] RBAC 데코레이터 구현
+- [x] 로그인 엔드포인트 동작
+- [x] 보호된 엔드포인트 동작
+- [x] RBAC 동작 확인
+- [x] Frontend 인증 통합
+- [x] 로그인 UI 구현
+- [x] 테스트 코드 작성
+- [x] 모든 테스트 통과 (20개)
+- [x] DeprecationWarning 제거
+- [x] pytest import 문제 해결
+
+---
+
 ## Phase 3.1 상세 구현 가이드
 
 ### Step 1: 의존성 추가
@@ -678,6 +895,9 @@ LOGISTICS_DB_PATH=./data/logistics.db
 CORS_ORIGINS=http://localhost:3000
 LOG_LEVEL=INFO
 WS_PING_INTERVAL=10
+JWT_SECRET_KEY=your-secret-key-change-in-prod
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
 **Frontend** (`.env.local`):
@@ -691,9 +911,9 @@ NEXT_PUBLIC_WS_MAX_RECONNECT_ATTEMPTS=10
 
 ## 다음 단계
 
-1. **Phase 3.2 구현 시작** - 인증/인가 (JWT) + RBAC
-2. **성능 모니터링** - 응답 시간 측정 및 최적화
-3. **프로덕션 준비** - 환경 변수 설정, 보안 강화
+1. **Phase 3.3 구현 시작** - 성능 최적화
+2. **WebSocket 인증 추가** (선택) - 실시간 기능 보호
+3. **Phase 3.4 준비** - CI/CD 파이프라인 설계
 
 ---
 
@@ -703,10 +923,12 @@ NEXT_PUBLIC_WS_MAX_RECONNECT_ATTEMPTS=10
 - **2026-01-08**: Phase 3 계획 수립
 - **2026-01-08**: Phase 3.1 상세 구현 가이드 작성
 - **2026-01-08**: Phase 3.1 구현 완료 및 로컬 검증 결과 추가
+- **2026-01-08**: Phase 3.2 구현 완료 및 테스트 검증 결과 추가
+- **2026-01-08**: DeprecationWarning 제거 및 pytest 설정 개선
 
 ---
 
-**문서 버전**: 1.1
+**문서 버전**: 1.2
 **최종 업데이트**: 2026-01-08
 ```
 
