@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - Dashboard crash when user cache is empty on initial render
   - Changed `user.role` to `user?.role` (optional chaining) in `frontend/pages/index.tsx`
   - Prevents `TypeError: Cannot read property 'role' of null`
+- Add DuckDB connection recovery policy with reset/memory options
 
 ### Changed
 - Updated `docs/Implementation_Progress.md` with server management script and bug fix details
