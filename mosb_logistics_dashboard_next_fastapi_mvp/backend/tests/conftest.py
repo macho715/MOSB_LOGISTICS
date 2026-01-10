@@ -12,7 +12,7 @@ if str(backend_dir) not in sys.path:
 
 os.environ.setdefault("LOGISTICS_DB_PATH", ":memory:")
 
-from main import app, cache, location_status_store
+from main import app, cache, db
 
 
 @pytest.fixture()
@@ -38,9 +38,11 @@ def token_factory(client: TestClient) -> Callable[..., str]:
 
 @pytest.fixture(autouse=True)
 def reset_location_status() -> None:
-    """KR: 위치 상태 저장소를 초기화합니다. EN: Reset location status store."""
-    location_status_store.clear()
+    """KR: 위치 상태 테이블을 초기화합니다. EN: Reset location status table."""
+    # Clear location_status table before each test
+    db.conn.execute("DELETE FROM location_status")
     cache.invalidate_location_status()
     yield
-    location_status_store.clear()
+    # Cleanup after test
+    db.conn.execute("DELETE FROM location_status")
     cache.invalidate_location_status()

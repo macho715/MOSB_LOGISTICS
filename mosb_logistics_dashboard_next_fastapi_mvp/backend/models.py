@@ -43,15 +43,44 @@ class Event(EventCreate):
     event_id: str
     ts: str
 
-class LocationStatus(BaseModel):
+
+class LocationStatusUpdate(BaseModel):
     """
-    Represents the real-time status of a location such as a site, warehouse or berth.
-    occupancy_rate is a value between 0.0 and 1.0 and status_code indicates health:
-    OK, WARNING or CRITICAL. last_updated is an ISO8601 timestamp.
+    Input model for updating location status.
+    status_code is optional and will be auto-derived from occupancy_rate if omitted.
     """
+
     location_id: str
     occupancy_rate: float = Field(..., ge=0.0, le=1.0)
     status_code: Literal["OK", "WARNING", "CRITICAL"] | None = None
+    last_updated: str
+
+    @field_validator("last_updated")
+    @classmethod
+    def validate_last_updated(cls, value: str) -> str:
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("last_updated must be valid ISO8601 timestamp") from exc
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.astimezone(timezone.utc)
+        now = datetime.now(timezone.utc)
+        if dt > now + timedelta(seconds=5):
+            raise ValueError("last_updated cannot be in the future")
+        return value
+
+
+class LocationStatus(BaseModel):
+    """
+    Output model representing the real-time status of a location.
+    status_code is always present (required) and matches the frontend TypeScript interface.
+    This model is used for API responses and WebSocket broadcasts.
+    """
+
+    location_id: str
+    occupancy_rate: float = Field(..., ge=0.0, le=1.0)
+    status_code: Literal["OK", "WARNING", "CRITICAL"]
     last_updated: str
 
     @field_validator("last_updated")
