@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from cache import CacheManager
 from db import Database
-from models import Event, Leg, Location, Shipment, LocationStatus, derive_status_code
+from models import Event, Leg, Location, Shipment, LocationStatus, LocationStatusUpdate, derive_status_code
 from auth import (
     authenticate_user,
     create_access_token,
@@ -84,7 +84,10 @@ app = FastAPI(title="MOSB Logistics Live API", version="0.1.0")
 
 cors_origins = [
     origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
+    ).split(",")
     if origin.strip()
 ]
 
@@ -284,25 +287,34 @@ def get_location_status_api(current_user: User = Depends(get_current_user)):
 
 @app.post("/api/location-status/update")
 async def update_location_status_api(
-    status: LocationStatus, current_user: User = Depends(require_role(["OPS", "ADMIN"]))
+    update: LocationStatusUpdate, current_user: User = Depends(require_role(["OPS", "ADMIN"]))
 ) -> dict[str, bool]:
     """
     Update or insert a location status record.
+    If status_code is omitted, it will be auto-derived from occupancy_rate.
     """
     try:
         location_ids = {loc.location_id for loc in db.get_locations()}
     except Exception as exc:
         logger.warning("Location validation failed: %s", exc)
         raise HTTPException(status_code=400, detail="Location validation failed") from exc
-    if status.location_id not in location_ids:
-        raise HTTPException(status_code=400, detail=f"Unknown location_id: {status.location_id}")
-    if status.status_code is None:
-        status = status.model_copy(
-            update={"status_code": derive_status_code(status.occupancy_rate)}
-        )
+    if update.location_id not in location_ids:
+        raise HTTPException(status_code=400, detail=f"Unknown location_id: {update.location_id}")
+
+    # Ensure status_code is always set (auto-derive if None)
+    status_code = update.status_code if update.status_code is not None else derive_status_code(update.occupancy_rate)
+
+    # Create LocationStatus (output model) with guaranteed non-null status_code
+    status = LocationStatus(
+        location_id=update.location_id,
+        occupancy_rate=update.occupancy_rate,
+        status_code=status_code,
+        last_updated=update.last_updated,
+    )
+
     db.upsert_location_status(status)
     cache.invalidate_location_status()
-    # broadcast update to websocket clients
+    # broadcast update to websocket clients (always non-null status_code)
     await hub.broadcast({"type": "location_status", "payload": status.model_dump()})
     return {"ok": True}
 

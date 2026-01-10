@@ -25,24 +25,37 @@ export class AuthService {
     formData.append("username", username);
     formData.append("password", password);
 
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formData,
-    });
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData,
+      });
 
-    if (!res.ok) {
-      if (res.status === 401) {
-        throw new Error("Invalid username or password");
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error("Invalid username or password");
+        }
+        throw new Error(`Login failed: ${res.statusText}`);
       }
-      throw new Error(`Login failed: ${res.statusText}`);
-    }
 
-    const data: TokenResponse = await res.json();
-    if (isBrowser()) {
-      localStorage.setItem(this.TOKEN_KEY, data.access_token);
+      const data: TokenResponse = await res.json();
+      if (isBrowser()) {
+        localStorage.setItem(this.TOKEN_KEY, data.access_token);
+      }
+      return data;
+    } catch (err) {
+      // 네트워크 오류 처리
+      if (err instanceof TypeError && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
+        throw new Error(
+          `Cannot connect to backend server at ${API_BASE}. ` +
+          `Please ensure the backend is running on port 8000. ` +
+          `Error: ${err.message}`
+        );
+      }
+      // 기타 오류는 그대로 전달
+      throw err;
     }
-    return data;
   }
 
   static getToken(): string | null {
@@ -56,23 +69,36 @@ export class AuthService {
       throw new Error("Not authenticated");
     }
 
-    const res = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    if (!res.ok) {
-      if (res.status === 401) {
-        this.logout();
-        throw new Error("Session expired");
+      if (!res.ok) {
+        if (res.status === 401) {
+          this.logout();
+          throw new Error("Session expired");
+        }
+        throw new Error(`Failed to get user: ${res.statusText}`);
       }
-      throw new Error(`Failed to get user: ${res.statusText}`);
-    }
 
-    const user: User = await res.json();
-    if (isBrowser()) {
-      localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+      const user: User = await res.json();
+      if (isBrowser()) {
+        localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+      }
+      return user;
+    } catch (err) {
+      // 네트워크 오류 처리
+      if (err instanceof TypeError && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
+        this.logout();
+        throw new Error(
+          `Cannot connect to backend server at ${API_BASE}. ` +
+          `Please ensure the backend is running on port 8000.`
+        );
+      }
+      // 기타 오류는 그대로 전달
+      throw err;
     }
-    return user;
   }
 
   static logout(): void {
