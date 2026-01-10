@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field
+from datetime import datetime, timedelta, timezone
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal
 
 
@@ -41,3 +42,37 @@ class EventCreate(BaseModel):
 class Event(EventCreate):
     event_id: str
     ts: str
+
+class LocationStatus(BaseModel):
+    """
+    Represents the real-time status of a location such as a site, warehouse or berth.
+    occupancy_rate is a value between 0.0 and 1.0 and status_code indicates health:
+    OK, WARNING or CRITICAL. last_updated is an ISO8601 timestamp.
+    """
+    location_id: str
+    occupancy_rate: float = Field(..., ge=0.0, le=1.0)
+    status_code: Literal["OK", "WARNING", "CRITICAL"] | None = None
+    last_updated: str
+
+    @field_validator("last_updated")
+    @classmethod
+    def validate_last_updated(cls, value: str) -> str:
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("last_updated must be valid ISO8601 timestamp") from exc
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.astimezone(timezone.utc)
+        now = datetime.now(timezone.utc)
+        if dt > now + timedelta(seconds=5):
+            raise ValueError("last_updated cannot be in the future")
+        return value
+
+
+def derive_status_code(occupancy_rate: float) -> Literal["OK", "WARNING", "CRITICAL"]:
+    if occupancy_rate >= 0.9:
+        return "CRITICAL"
+    if occupancy_rate >= 0.7:
+        return "WARNING"
+    return "OK"

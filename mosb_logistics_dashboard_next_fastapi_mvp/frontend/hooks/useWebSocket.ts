@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Event } from "../types/logistics";
+import type { Event, LocationStatus } from "../types/logistics";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 const WS_URL = API_BASE.replace(/^http/, "ws");
@@ -42,7 +42,10 @@ function readNumberSetting(value: string | undefined, fallback: number): number 
   return Number.isFinite(n) ? n : fallback;
 }
 
-export function useWebSocket(onEvent: (event: Event) => void) {
+export function useWebSocket(
+  onEvent: (event: Event) => void,
+  onLocationStatus?: (status: LocationStatus) => void
+) {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -50,10 +53,12 @@ export function useWebSocket(onEvent: (event: Event) => void) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedByUser = useRef(false);
   const onEventRef = useRef(onEvent);
+  const onLocationStatusRef = useRef(onLocationStatus);
 
   useEffect(() => {
     onEventRef.current = onEvent;
-  }, [onEvent]);
+    onLocationStatusRef.current = onLocationStatus;
+  }, [onEvent, onLocationStatus]);
 
   useEffect(() => {
     const reconnectDelay = readNumberSetting(
@@ -100,9 +105,17 @@ export function useWebSocket(onEvent: (event: Event) => void) {
         ws.onmessage = (msg) => {
           try {
             const data = JSON.parse(msg.data);
-            if (data?.type !== "event" || !data.payload) return;
-            const event = normalizeEvent(data.payload);
-            if (event) onEventRef.current(event);
+            if (data?.type === "event" && data.payload) {
+              const event = normalizeEvent(data.payload);
+              if (event) onEventRef.current(event);
+              return;
+            }
+            if (data?.type === "location_status" && data.payload) {
+              if (onLocationStatusRef.current) {
+                onLocationStatusRef.current(data.payload as LocationStatus);
+              }
+              return;
+            }
           } catch {
             // Ignore parse errors to avoid crashing the UI.
           }

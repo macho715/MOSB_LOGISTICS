@@ -4,6 +4,7 @@ import { useClientOnlyGeofences } from "../../hooks/useClientOnlyGeofences";
 import { useBatchedClientOnlyWs } from "../../hooks/useBatchedClientOnlyWs";
 import { useClientOnlyStore } from "../../store/useClientOnlyStore";
 import { LogisticsAPI } from "../../lib/api";
+import { AuthService } from "../../lib/auth";
 import type { Event } from "../../types/logistics";
 import type { LiveEvent } from "../../types/clientOnly";
 
@@ -27,24 +28,12 @@ function getWsUrl(): string {
   return `${wsUrl}/ws/events`;
 }
 
-function getToken(): string | null {
-  try {
-    return (
-      localStorage.getItem("access_token") ??
-      localStorage.getItem("token") ??
-      localStorage.getItem("jwt") ??
-      null
-    );
-  } catch {
-    return null;
-  }
-}
-
 export default function ClientOnlyDashboard() {
   useClientOnlyGeofences("/data/geofence.json");
 
   useEffect(() => {
     const loadInitialData = async () => {
+      if (!AuthService.isAuthenticated()) return;
       try {
         const [locations, legs, events] = await Promise.all([
           LogisticsAPI.getLocations(),
@@ -105,7 +94,7 @@ export default function ClientOnlyDashboard() {
   useBatchedClientOnlyWs({
     wsUrl: getWsUrl(),
     flushMs: 500,
-    token: typeof window !== "undefined" ? getToken() : null,
+    token: typeof window !== "undefined" ? AuthService.getToken() : null,
   });
 
   useEffect(() => {

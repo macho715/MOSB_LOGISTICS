@@ -39,3 +39,23 @@ export interface Event {
   lon: number;
   remark: string;
 }
+
+export interface LocationStatus {
+  /**
+   * The ID of the location that this status applies to.
+   */
+  location_id: string;
+  /**
+   * Occupancy rate between 0 and 1 where 1 means full capacity.
+   */
+  occupancy_rate: number;
+  /**
+   * Health/status code for the location. OK = normal, WARNING = near capacity,
+   * CRITICAL = over capacity or urgent attention required.
+   */
+  status_code: "OK" | "WARNING" | "CRITICAL";
+  /**
+   * ISO8601 timestamp when this status was last updated.
+   */
+  last_updated: string;
+}

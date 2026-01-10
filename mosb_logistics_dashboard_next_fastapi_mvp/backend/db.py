@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import duckdb
 
-from models import Event, Leg, Location, Shipment
+from models import Event, Leg, Location, Shipment, LocationStatus
 
 
 class Database:
@@ -85,6 +85,18 @@ class Database:
                 name VARCHAR NOT NULL,
                 lat DOUBLE NOT NULL,
                 lon DOUBLE NOT NULL
+            )
+            """
+        )
+
+        # Table for per-location status; tracks occupancy and health of each site/warehouse/berth.
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS location_status (
+                location_id VARCHAR PRIMARY KEY,
+                occupancy_rate DOUBLE NOT NULL,
+                status_code VARCHAR NOT NULL,
+                last_updated VARCHAR NOT NULL
             )
             """
         )
@@ -173,6 +185,38 @@ class Database:
     def _fetch_models(self, query: str, columns: list[str], model, params=None):
         rows = self.conn.execute(query, params or []).fetchall()
         return [model(**dict(zip(columns, row))) for row in rows]
+
+    def get_location_status(self) -> List[LocationStatus]:
+        """
+        Returns the list of LocationStatus objects representing the latest status for each location.
+        """
+        return self._fetch_models(
+            "SELECT location_id, occupancy_rate, status_code, last_updated FROM location_status",
+            ["location_id", "occupancy_rate", "status_code", "last_updated"],
+            LocationStatus,
+        )
+
+    def upsert_location_status(self, status: LocationStatus) -> None:
+        """
+        Inserts or updates a LocationStatus record.
+        If a record for the same location_id exists, it is updated; otherwise inserted.
+        """
+        self.conn.execute(
+            """
+            INSERT INTO location_status (location_id, occupancy_rate, status_code, last_updated)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(location_id) DO UPDATE SET
+              occupancy_rate=excluded.occupancy_rate,
+              status_code=excluded.status_code,
+              last_updated=excluded.last_updated
+            """,
+            [
+                status.location_id,
+                status.occupancy_rate,
+                status.status_code,
+                status.last_updated,
+            ],
+        )
 
     def get_locations(self) -> List[Location]:
         """위치 목록을 반환합니다. / Return the list of locations."""

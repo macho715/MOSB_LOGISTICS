@@ -15,6 +15,8 @@ class CacheManager:
         self.shipments_cache = TTLCache(maxsize=100, ttl=300)
         self.legs_cache = TTLCache(maxsize=100, ttl=300)
         self.events_cache = TTLCache(maxsize=500, ttl=60)
+        # Cache for location status with shorter TTL (30s) due to frequent changes.
+        self.location_status_cache = TTLCache(maxsize=100, ttl=30)
 
     def get_cached_locations(self, key: str = "all") -> Optional[List]:
         return self.locations_cache.get(key)
@@ -51,6 +53,18 @@ class CacheManager:
 
     def invalidate_events(self) -> None:
         self.events_cache.clear()
+
+    def get_cached_location_status(self, key: str = "all"):
+        """Return cached location status list."""
+        return self.location_status_cache.get(key)
+
+    def set_cached_location_status(self, key: str, value):
+        """Cache location status list."""
+        self.location_status_cache[key] = value
+
+    def invalidate_location_status(self) -> None:
+        """Clear cached location status."""
+        self.location_status_cache.clear()
 
     def invalidate_all(self) -> None:
         self.invalidate_locations()

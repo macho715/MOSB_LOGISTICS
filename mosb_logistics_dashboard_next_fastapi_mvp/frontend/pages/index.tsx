@@ -8,7 +8,7 @@ import { Login } from "../components/Login";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { LogisticsAPI } from "../lib/api";
 import { AuthService, User } from "../lib/auth";
-import type { Event, Location } from "../types/logistics";
+import type { Event, Location, LocationStatus } from "../types/logistics";
 
 function toNum(value: unknown): number {
     const n = Number(value);
@@ -84,6 +84,7 @@ export default function Home() {
     const [authError, setAuthError] = useState<string | null>(null);
     const [locations, setLocations] = useState<Location[]>([]);
     const [events, setEvents] = useState<Event[]>([]);
+    const [locationStatusMap, setLocationStatusMap] = useState<{ [id: string]: LocationStatus }>({});
     const [selected, setSelected] = useState<string>("");
     const [isMapReady, setIsMapReady] = useState(false);
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -120,13 +121,19 @@ export default function Home() {
         };
         const load = async () => {
             try {
-                const [locs, evs] = await Promise.all([
+                const [locs, evs, statusList] = await Promise.all([
                     LogisticsAPI.getLocations(),
                     LogisticsAPI.getEvents(),
+                    LogisticsAPI.getLocationStatus(),
                 ]);
                 if (!active) return;
                 setLocations(locs || []);
                 setEvents(evs || []);
+                const map: { [id: string]: LocationStatus } = {};
+                (statusList || []).forEach((s) => {
+                    map[s.location_id] = s;
+                });
+                setLocationStatusMap(map);
                 if ((evs || []).length > 0) setSelected((evs[0]?.shpt_no) || "");
             } catch (err) {
                 if (!active) return;
@@ -149,7 +156,12 @@ export default function Home() {
         setEvents(prev => [event, ...prev].slice(0, 500));
     }, [user]);
 
-    useWebSocket(handleWsEvent);
+    useWebSocket(handleWsEvent, (status: LocationStatus) => {
+        setLocationStatusMap((prev) => ({
+            ...prev,
+            [status.location_id]: status,
+        }));
+    });
 
     const latestByShipment = useMemo(() => {
         const map = new Map<string, Event>();
@@ -191,8 +203,24 @@ export default function Home() {
             data: locations,
             pickable: true,
             getPosition: d => [toNum(d.lon), toNum(d.lat)],
-            getFillColor: d => colorForType(d.type),
-            getRadius: d => (d.type === "MOSB" ? 260 : (d.type === "WH" ? 220 : 180)),
+            getFillColor: d => {
+                const status = locationStatusMap[d.location_id];
+                if (status) {
+                    switch (status.status_code) {
+                        case "CRITICAL": return [255, 0, 0, 220];
+                        case "WARNING": return [255, 165, 0, 220];
+                        default: return [0, 128, 0, 220];
+                    }
+                }
+                return colorForType(d.type);
+            },
+            getRadius: d => {
+                const status = locationStatusMap[d.location_id];
+                if (status) {
+                    return 50 + status.occupancy_rate * 200;
+                }
+                return d.type === "MOSB" ? 260 : (d.type === "WH" ? 220 : 180);
+            },
             onClick: info => {
                 const d = info.object as any;
                 if (d?.location_id) {
@@ -367,7 +395,19 @@ export default function Home() {
                                 initialViewState={initialViewState}
                                 controller={true}
                                 layers={layers as any}
-                                getTooltip={({ object }: any) => object && (object.name || object.shpt_no)}
+                                getTooltip={({ object }: any) => {
+                                    if (!object) return null;
+                                    const id = (object as any)?.location_id;
+                                    if (id) {
+                                        const status = locationStatusMap[id];
+                                        if (status) {
+                                            const pct = Math.round(status.occupancy_rate * 100);
+                                            return `${object.name} – ${pct}% (${status.status_code})`;
+                                        }
+                                        return `${object.name}`;
+                                    }
+                                    return object.name || object.shpt_no;
+                                }}
                             />
                         )}
                     </div>
