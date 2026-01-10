@@ -7,7 +7,16 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Type
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends, status
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    Depends,
+    Response,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -15,7 +24,7 @@ from pydantic import BaseModel
 
 from cache import CacheManager
 from db import Database
-from models import Event, Leg, Location, Shipment
+from models import Event, Leg, Location, Shipment, LocationStatus, LocationStatusUpdate
 from auth import (
     authenticate_user,
     create_access_token,
@@ -30,6 +39,12 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 WS_PING_INTERVAL = int(os.getenv("WS_PING_INTERVAL", "10"))
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
+
+LOCATION_STATUS_CODES = {
+    "OK": 100,
+    "WARN": 200,
+    "CRITICAL": 300,
+}
 
 def read_csv(path: str) -> List[Dict[str, Any]]:
     if not os.path.exists(path):
@@ -73,6 +88,7 @@ def parse_rows(rows: List[Dict[str, Any]], model: Type[BaseModel], label: str):
 
 db = Database()
 cache = CacheManager()
+LOCATION_STATUS_STORE: Dict[str, LocationStatus] = {}
 
 app = FastAPI(title="MOSB Logistics Live API", version="0.1.0")
 
@@ -140,6 +156,11 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 
 @app.get("/api/locations", response_model=list[Location])
 def get_locations(current_user: User = Depends(get_current_user)):
+    return load_locations()
+
+
+def load_locations() -> List[Location]:
+    """KR: 위치 목록을 로드합니다. EN: Load location list."""
     cached = cache.get_cached_locations()
     if cached is not None:
         return cached
@@ -151,6 +172,22 @@ def get_locations(current_user: User = Depends(get_current_user)):
         locations = parse_rows(rows, Location, "location")
     cache.set_cached_locations("all", locations)
     return locations
+
+
+def derive_status_code(status_value: str) -> int:
+    """KR: 상태 코드 매핑을 반환합니다. EN: Return status code mapping."""
+    return LOCATION_STATUS_CODES[status_value]
+
+
+def validate_status_timestamp(ts: str) -> datetime:
+    """KR: 위치 상태 타임스탬프를 검증합니다. EN: Validate location status timestamp."""
+    parsed = parse_iso_ts(ts)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Invalid ts format")
+    now = datetime.now(timezone.utc)
+    if parsed > now:
+        raise HTTPException(status_code=400, detail="ts cannot be in the future")
+    return parsed.replace(microsecond=0)
 
 @app.get("/api/legs", response_model=list[Leg])
 def get_legs(current_user: User = Depends(get_current_user)):
@@ -206,6 +243,51 @@ def get_events(since: Optional[str] = None, current_user: User = Depends(get_cur
                 events = parse_rows(out, Event, "event")
     cache.set_cached_events(cache_key, events)
     return events
+
+
+@app.get("/api/location-status", response_model=list[LocationStatus])
+def get_location_status(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+):
+    """KR: 위치 상태 목록을 조회합니다. EN: Fetch location status list."""
+    cached = cache.get_cached_location_status()
+    if cached is not None:
+        response.headers["X-Cache"] = "HIT"
+        return cached
+    response.headers["X-Cache"] = "MISS"
+    statuses = list(LOCATION_STATUS_STORE.values())
+    cache.set_cached_location_status("all", statuses)
+    return statuses
+
+
+@app.post("/api/location-status", response_model=LocationStatus)
+def upsert_location_status(
+    payload: LocationStatusUpdate,
+    current_user: User = Depends(require_role(["OPS", "ADMIN"])),
+):
+    """KR: 위치 상태를 갱신합니다. EN: Update location status."""
+    locations = load_locations()
+    location_ids = {loc.location_id for loc in locations}
+    if payload.location_id not in location_ids:
+        raise HTTPException(status_code=404, detail="Unknown location_id")
+    parsed_ts = validate_status_timestamp(payload.ts)
+    existing = LOCATION_STATUS_STORE.get(payload.location_id)
+    if existing:
+        existing_ts = parse_iso_ts(existing.ts)
+        if existing_ts and parsed_ts <= existing_ts:
+            raise HTTPException(status_code=409, detail="ts must be newer than latest")
+    status_code = derive_status_code(payload.status)
+    normalized_ts = parsed_ts.isoformat()
+    status = LocationStatus(
+        location_id=payload.location_id,
+        ts=normalized_ts,
+        status=payload.status,
+        status_code=status_code,
+    )
+    LOCATION_STATUS_STORE[payload.location_id] = status
+    cache.invalidate_location_status()
+    return status
 
 # Simple websocket broadcaster
 class Hub:

@@ -41,3 +41,15 @@ class EventCreate(BaseModel):
 class Event(EventCreate):
     event_id: str
     ts: str
+
+
+class LocationStatusUpdate(BaseModel):
+    """KR: 위치 상태 업데이트 입력입니다. EN: Location status update input."""
+    location_id: str
+    ts: str
+    status: Literal["OK", "WARN", "CRITICAL"]
+
+
+class LocationStatus(LocationStatusUpdate):
+    """KR: 서버 파생 상태 코드를 포함한 위치 상태입니다. EN: Location status with derived code."""
+    status_code: int

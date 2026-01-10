@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Backend location status API with cache-aware listing and update validation (2026-01-10)
+  - GET `/api/location-status` with cache hit/miss header
+  - POST `/api/location-status` with role gating, timestamp validation, and derived status codes
+  - Test coverage for cache behavior, role enforcement, and monotonic updates
 - **Improved `start-servers.ps1` script** (2026-01-10)
   - Auto-fix `next-env.d.ts`: Automatically removes invalid `import "./.next/dev/types/routes.d.ts"` with improved regex handling (Windows/Unix line endings)
   - Cache cleanup option: `-CleanCache` parameter to clean `.next` cache
