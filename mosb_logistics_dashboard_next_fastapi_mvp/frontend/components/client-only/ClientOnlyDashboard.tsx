@@ -5,7 +5,7 @@ import { useBatchedClientOnlyWs } from "../../hooks/useBatchedClientOnlyWs";
 import { useClientOnlyStore } from "../../store/useClientOnlyStore";
 import { LogisticsAPI } from "../../lib/api";
 import { AuthService } from "../../lib/auth";
-import type { Event } from "../../types/logistics";
+import type { Event, LocationStatus } from "../../types/logistics";
 import type { LiveEvent } from "../../types/clientOnly";
 
 function convertEventToLiveEvent(event: Event): LiveEvent {
@@ -35,16 +35,18 @@ export default function ClientOnlyDashboard() {
     const loadInitialData = async () => {
       if (!AuthService.isAuthenticated()) return;
       try {
-        const [locations, legs, events] = await Promise.all([
+        const [locations, legs, events, statusList] = await Promise.all([
           LogisticsAPI.getLocations(),
           LogisticsAPI.getLegs(),
           LogisticsAPI.getEvents(),
+          LogisticsAPI.getLocationStatus(),
         ]);
 
-        const { setLocations, setLegs, ingestEvents } = useClientOnlyStore.getState();
+        const { setLocations, setLegs, ingestEvents, setLocationStatus } = useClientOnlyStore.getState();
         setLocations(locations);
         setLegs(legs);
         ingestEvents(events.map(convertEventToLiveEvent));
+        setLocationStatus(statusList);
       } catch (err) {
         console.error("Failed to load initial data:", err);
       }
@@ -95,6 +97,9 @@ export default function ClientOnlyDashboard() {
     wsUrl: getWsUrl(),
     flushMs: 500,
     token: typeof window !== "undefined" ? AuthService.getToken() : null,
+    onLocationStatus: (status: LocationStatus) => {
+      useClientOnlyStore.getState().upsertLocationStatus(status);
+    },
   });
 
   useEffect(() => {

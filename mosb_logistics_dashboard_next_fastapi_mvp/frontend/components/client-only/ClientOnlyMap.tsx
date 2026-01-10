@@ -11,6 +11,7 @@ import { computeEtaWedges } from "../../lib/client-only/eta";
 import { buildHeatPoints } from "../../lib/client-only/heatmap";
 import { useClientOnlyStore } from "../../store/useClientOnlyStore";
 import type { AnnotatedEvent } from "../../types/clientOnly";
+import type { LocationStatus } from "../../types/logistics";
 
 const DEFAULT_VIEW = {
     longitude: 54.45857,
@@ -68,6 +69,8 @@ export default function ClientOnlyMap() {
             .filter((event): event is AnnotatedEvent => Boolean(event)),
     );
     const shipments = useClientOnlyStore((s) => Object.values(s.shipmentsByNo));
+    const locationStatusById = useClientOnlyStore((s) => s.locationStatusById);
+    const getEventsCountByLocation = useClientOnlyStore((s) => s.getEventsCountByLocation);
 
     const [isMapReady, setIsMapReady] = useState(false);
     const [viewState, setViewState] = useState(DEFAULT_VIEW);
@@ -90,6 +93,15 @@ export default function ClientOnlyMap() {
         () => currentTimeMs - ui.hoursWindow * 60 * 60 * 1000,
         [currentTimeMs, ui.hoursWindow],
     );
+
+    // Location별 이벤트 카운트 메모이제이션
+    const eventsCountByLocation = useMemo(() => {
+        const counts: Record<string, number> = {};
+        locations.forEach((loc) => {
+            counts[loc.location_id] = getEventsCountByLocation(loc.location_id, sinceMs);
+        });
+        return counts;
+    }, [locations, sinceMs, getEventsCountByLocation, events]);
 
     const heatPoints = useMemo(
         () => buildHeatPoints(events, { sinceMs, eventType: ui.heatEventType, zoneId: "all" }),
@@ -321,8 +333,19 @@ export default function ClientOnlyMap() {
                     id: "locations",
                     data: locations,
                     getPosition: (d: any) => [d.lon, d.lat],
-                    getRadius: (d: any) => (d.type === "MOSB" ? 260 : 200),
                     getFillColor: (d: any) => {
+                        const status = locationStatusById[d.location_id];
+                        if (status) {
+                            switch (status.status_code) {
+                                case "CRITICAL":
+                                    return [255, 0, 0, 220]; // 빨강
+                                case "WARNING":
+                                    return [255, 165, 0, 220]; // 주황
+                                default:
+                                    return [0, 128, 0, 220]; // 초록 (OK)
+                            }
+                        }
+                        // Status 없을 때는 기존 type 기반 색상 사용
                         const m: Record<string, [number, number, number, number]> = {
                             MOSB: [255, 80, 80, 230],
                             WH: [140, 90, 255, 220],
@@ -331,6 +354,13 @@ export default function ClientOnlyMap() {
                             SITE: [255, 120, 80, 220],
                         };
                         return m[d.type] || [160, 160, 160, 200];
+                    },
+                    getRadius: (d: any) => {
+                        const status = locationStatusById[d.location_id];
+                        if (status) {
+                            return 50 + status.occupancy_rate * 200; // 50-250 픽셀
+                        }
+                        return d.type === "MOSB" ? 260 : 200; // 기존 기본값
                     },
                     pickable: false,
                 }),
@@ -341,10 +371,25 @@ export default function ClientOnlyMap() {
                     id: "location-labels",
                     data: locations,
                     getPosition: (d: any) => [d.lon, d.lat],
-                    getText: (d: any) => d.name,
+                    getText: (d: any) => {
+                        const status = locationStatusById[d.location_id];
+                        const eventCount = eventsCountByLocation[d.location_id] || 0;
+
+                        if (status) {
+                            const pct = Math.round(status.occupancy_rate * 100);
+                            return `${d.name}\n${pct}% (${status.status_code})\n${eventCount}건`;
+                        }
+                        return `${d.name}\n${eventCount}건`;
+                    },
                     getSize: 12,
                     sizeUnits: "pixels",
-                    getColor: [220, 230, 240, 220],
+                    getColor: (d: any) => {
+                        const status = locationStatusById[d.location_id];
+                        if (status?.status_code === "CRITICAL") {
+                            return [255, 200, 200, 255]; // 빨간색 텍스트
+                        }
+                        return [220, 230, 240, 220]; // 기본 색상
+                    },
                     getPixelOffset: [0, 14],
                     getTextAnchor: "middle",
                     getAlignmentBaseline: "top",
@@ -361,6 +406,8 @@ export default function ClientOnlyMap() {
         etaWedges,
         arcs,
         locations,
+        locationStatusById,
+        eventsCountByLocation,
         ui.showGeofenceMask,
         ui.showHeatmap,
         ui.showEta,

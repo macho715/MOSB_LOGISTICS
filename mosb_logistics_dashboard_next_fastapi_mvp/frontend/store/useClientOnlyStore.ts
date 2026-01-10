@@ -8,7 +8,7 @@ import type {
     LiveEvent,
     ShipmentLeg,
 } from "../types/clientOnly";
-import type { Leg, Location } from "../types/logistics";
+import type { Leg, Location, LocationStatus } from "../types/logistics";
 
 type UiState = {
     showGeofenceMask: boolean;
@@ -17,6 +17,8 @@ type UiState = {
     hoursWindow: number;
     heatEventType: "all" | "enter" | "exit" | "move" | "unknown";
 };
+
+type LocationStatusById = Record<string, LocationStatus>;
 
 type ClientOnlyState = {
     geofences: GeoFenceCollection | null;
@@ -27,6 +29,7 @@ type ClientOnlyState = {
     eventsById: Record<string, AnnotatedEvent>;
     eventIds: string[];
     lastZoneByKey: Record<string, string | null>;
+    locationStatusById: LocationStatusById;
     ui: UiState;
 
     setGeofences: (c: GeoFenceCollection) => void;
@@ -37,6 +40,9 @@ type ClientOnlyState = {
     pruneOldEvents: (nowMs: number) => void;
     setUi: (patch: Partial<UiState>) => void;
     deriveShipmentsFromEvents: () => void;
+    setLocationStatus: (items: LocationStatus[]) => void;
+    upsertLocationStatus: (item: LocationStatus) => void;
+    getEventsCountByLocation: (locationId: string, sinceMs: number) => number;
 };
 
 const MAX_EVENTS = 1000;
@@ -65,6 +71,7 @@ export const useClientOnlyStore = create<ClientOnlyState>()(
         eventsById: {},
         eventIds: [],
         lastZoneByKey: {},
+        locationStatusById: {},
         ui: {
             showGeofenceMask: true,
             showHeatmap: true,
@@ -187,6 +194,59 @@ export const useClientOnlyStore = create<ClientOnlyState>()(
         },
 
         setUi: (patch) => set({ ui: { ...get().ui, ...patch } }, false, "setUi"),
+
+        setLocationStatus: (items) => {
+            const byId: LocationStatusById = {};
+            for (const item of items) {
+                if (item?.location_id) {
+                    byId[item.location_id] = item;
+                }
+            }
+            set({ locationStatusById: byId }, false, "setLocationStatus");
+        },
+
+        upsertLocationStatus: (item) => {
+            if (!item?.location_id) return;
+            const prev = get().locationStatusById;
+            // Monotonic merge: only update if last_updated is newer (or missing)
+            const prevItem = prev[item.location_id];
+            if (prevItem) {
+                try {
+                    const prevMs = Date.parse(prevItem.last_updated);
+                    const newMs = Date.parse(item.last_updated);
+                    if (!Number.isFinite(newMs) || (Number.isFinite(prevMs) && newMs < prevMs)) {
+                        return; // Skip older update
+                    }
+                    // Reject future timestamps (5s tolerance)
+                    const nowMs = Date.now();
+                    if (newMs > nowMs + 5000) {
+                        return; // Skip future timestamp
+                    }
+                } catch {
+                    // Invalid timestamp, skip
+                    return;
+                }
+            }
+            set(
+                { locationStatusById: { ...prev, [item.location_id]: item } },
+                false,
+                "upsertLocationStatus",
+            );
+        },
+
+        getEventsCountByLocation: (locationId, sinceMs) => {
+            const { eventsById, eventIds } = get();
+            let count = 0;
+            for (const id of eventIds) {
+                const event = eventsById[id];
+                if (!event) continue;
+                if (event.ts_ms < sinceMs) continue;
+                if (event.meta?.location_id === locationId) {
+                    count += 1;
+                }
+            }
+            return count;
+        },
 
         deriveShipmentsFromEvents: () => {
             const { eventsById, eventIds, legs, locations } = get();

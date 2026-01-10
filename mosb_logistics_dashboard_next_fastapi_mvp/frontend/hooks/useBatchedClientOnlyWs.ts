@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef } from "react";
 import { parseWsMessage } from "../lib/client-only/ws";
 import { useClientOnlyStore } from "../store/useClientOnlyStore";
 import type { LiveEvent, ClientShipment } from "../types/clientOnly";
+import type { LocationStatus } from "../types/logistics";
 
 type Options = {
   wsUrl: string;
   flushMs?: number;
   token?: string | null;
+  onLocationStatus?: (status: LocationStatus) => void;
 };
 
 function buildWsUrl(base: string, token?: string | null): string {
@@ -25,6 +27,12 @@ export function useBatchedClientOnlyWs(opts: Options) {
   const eventsBuf = useRef<LiveEvent[]>([]);
   const shipmentsBuf = useRef<ClientShipment[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
+  const onLocationStatusRef = useRef(opts.onLocationStatus);
+
+  // Update ref when callback changes
+  useEffect(() => {
+    onLocationStatusRef.current = opts.onLocationStatus;
+  }, [opts.onLocationStatus]);
 
   const url = useMemo(() => buildWsUrl(opts.wsUrl, opts.token), [opts.wsUrl, opts.token]);
 
@@ -61,6 +69,20 @@ export function useBatchedClientOnlyWs(opts: Options) {
         };
 
         ws.onmessage = (ev) => {
+          try {
+            const data = JSON.parse(String(ev.data));
+            // Handle location_status messages
+            if (data?.type === "location_status" && data.payload && onLocationStatusRef.current) {
+              const status = data.payload as LocationStatus;
+              if (status?.location_id && typeof status.occupancy_rate === "number") {
+                onLocationStatusRef.current(status);
+              }
+              return;
+            }
+          } catch {
+            // Fall through to parseWsMessage for other message types
+          }
+
           const parsed = parseWsMessage(String(ev.data));
           if (parsed.kind === "ping" || parsed.kind === "hello") return;
           if (parsed.kind === "events") eventsBuf.current.push(...parsed.events);
