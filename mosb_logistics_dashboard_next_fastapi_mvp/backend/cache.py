@@ -1,10 +1,9 @@
 import hashlib
 import inspect
 from functools import wraps
-from typing import Optional, TypeVar, List
+from typing import List, Optional, TypeVar
 
 from cachetools import TTLCache
-
 
 T = TypeVar("T")
 
@@ -42,6 +41,12 @@ class CacheManager:
     def set_cached_events(self, key: str, value: List) -> None:
         self.events_cache[key] = value
 
+    def get_cached_location_status(self, key: str = "all") -> Optional[List]:
+        return self.location_status_cache.get(key)
+
+    def set_cached_location_status(self, key: str, value: List) -> None:
+        self.location_status_cache[key] = value
+
     def invalidate_locations(self) -> None:
         self.locations_cache.clear()
 
@@ -54,11 +59,11 @@ class CacheManager:
     def invalidate_events(self) -> None:
         self.events_cache.clear()
 
-    def get_cached_location_status(self, key: str = "all"):
+    def get_cached_location_status(self, key: str = "all") -> Optional[List]:
         """Return cached location status list."""
         return self.location_status_cache.get(key)
 
-    def set_cached_location_status(self, key: str, value):
+    def set_cached_location_status(self, key: str, value: List) -> None:
         """Cache location status list."""
         self.location_status_cache[key] = value
 
@@ -71,6 +76,7 @@ class CacheManager:
         self.invalidate_shipments()
         self.invalidate_legs()
         self.invalidate_events()
+        self.invalidate_location_status()
 
 
 def cache_response(ttl: int = 300):
