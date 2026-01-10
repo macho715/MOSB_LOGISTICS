@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import duckdb
 
-from models import Event, Leg, Location, Shipment, LocationStatus
+from models import Event, Leg, Location, Shipment, LocationMetric, LocationStatus
 
 
 class Database:
@@ -273,6 +273,46 @@ class Database:
             "SELECT * FROM events ORDER BY ts DESC",
             columns,
             Event,
+        )
+
+    def get_location_metrics(self, since: Optional[str] = None) -> List[LocationMetric]:
+        """KR: 위치별 이벤트/상태 지표를 반환합니다. EN: Return per-location metrics."""
+        event_filter = ""
+        params: list[str] = []
+        if since:
+            event_filter = "WHERE ts >= ?"
+            params = [since]
+        query = f"""
+            WITH event_counts AS (
+                SELECT location_id, COUNT(*) AS event_count
+                FROM events
+                {event_filter}
+                GROUP BY location_id
+            )
+            SELECT
+                locations.location_id,
+                location_status.occupancy_rate,
+                location_status.status_code,
+                location_status.last_updated,
+                COALESCE(event_counts.event_count, 0) AS event_count
+            FROM locations
+            LEFT JOIN event_counts
+                ON event_counts.location_id = locations.location_id
+            LEFT JOIN location_status
+                ON location_status.location_id = locations.location_id
+            ORDER BY locations.location_id
+        """
+        return self._fetch_models(
+            query,
+            [
+                "location_id",
+                "occupancy_rate",
+                "status_code",
+                "last_updated",
+                "event_count",
+            ],
+            LocationMetric,
+            params,
         )
 
     def append_event(self, event: Event) -> None:

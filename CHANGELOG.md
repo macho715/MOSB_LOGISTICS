@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Location metrics API** (2026-01-10)
+  - `LocationMetric` model with event count default handling
+  - `GET /api/location-metrics` endpoint with cache support
 - **Location status monitoring** (2026-01-10)
   - `LocationStatus` model + DuckDB table
   - `GET /api/location-status` and `POST /api/location-status/update`
