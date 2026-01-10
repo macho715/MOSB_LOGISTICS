@@ -8,7 +8,7 @@ import type {
     LiveEvent,
     ShipmentLeg,
 } from "../types/clientOnly";
-import type { Leg, Location, LocationStatus } from "../types/logistics";
+import type { Leg, Location, LocationMetric, LocationStatus } from "../types/logistics";
 
 type UiState = {
     showGeofenceMask: boolean;
@@ -19,6 +19,7 @@ type UiState = {
 };
 
 type LocationStatusById = Record<string, LocationStatus>;
+type LocationMetricsById = Record<string, LocationMetric>;
 
 type ClientOnlyState = {
     geofences: GeoFenceCollection | null;
@@ -30,6 +31,7 @@ type ClientOnlyState = {
     eventIds: string[];
     lastZoneByKey: Record<string, string | null>;
     locationStatusById: LocationStatusById;
+    locationMetricsById: LocationMetricsById;
     ui: UiState;
 
     setGeofences: (c: GeoFenceCollection) => void;
@@ -42,6 +44,7 @@ type ClientOnlyState = {
     deriveShipmentsFromEvents: () => void;
     setLocationStatus: (items: LocationStatus[]) => void;
     upsertLocationStatus: (item: LocationStatus) => void;
+    setLocationMetrics: (items: LocationMetric[]) => void;
     getEventsCountByLocation: (locationId: string, sinceMs: number) => number;
 };
 
@@ -72,6 +75,7 @@ export const useClientOnlyStore = create<ClientOnlyState>()(
         eventIds: [],
         lastZoneByKey: {},
         locationStatusById: {},
+        locationMetricsById: {},
         ui: {
             showGeofenceMask: true,
             showHeatmap: true,
@@ -232,6 +236,16 @@ export const useClientOnlyStore = create<ClientOnlyState>()(
                 false,
                 "upsertLocationStatus",
             );
+        },
+
+        setLocationMetrics: (items) => {
+            const byId: LocationMetricsById = {};
+            for (const item of items) {
+                if (item?.location_id) {
+                    byId[item.location_id] = item;
+                }
+            }
+            set({ locationMetricsById: byId }, false, "setLocationMetrics");
         },
 
         getEventsCountByLocation: (locationId, sinceMs) => {

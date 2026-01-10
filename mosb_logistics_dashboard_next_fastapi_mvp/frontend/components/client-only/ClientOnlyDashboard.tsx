@@ -35,18 +35,26 @@ export default function ClientOnlyDashboard() {
     const loadInitialData = async () => {
       if (!AuthService.isAuthenticated()) return;
       try {
-        const [locations, legs, events, statusList] = await Promise.all([
+        const [locations, legs, events, statusList, metrics] = await Promise.all([
           LogisticsAPI.getLocations(),
           LogisticsAPI.getLegs(),
           LogisticsAPI.getEvents(),
           LogisticsAPI.getLocationStatus(),
+          LogisticsAPI.getLocationMetrics(),
         ]);
 
-        const { setLocations, setLegs, ingestEvents, setLocationStatus } = useClientOnlyStore.getState();
+        const {
+          setLocations,
+          setLegs,
+          ingestEvents,
+          setLocationStatus,
+          setLocationMetrics,
+        } = useClientOnlyStore.getState();
         setLocations(locations);
         setLegs(legs);
         ingestEvents(events.map(convertEventToLiveEvent));
         setLocationStatus(statusList);
+        setLocationMetrics(metrics);
       } catch (err) {
         console.error("Failed to load initial data:", err);
       }

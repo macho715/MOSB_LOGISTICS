@@ -59,3 +59,27 @@ export interface LocationStatus {
    */
   last_updated: string;
 }
+
+export interface LocationMetric {
+  /**
+   * The ID of the location that this metric applies to.
+   */
+  location_id: string;
+  /**
+   * Human-readable location name.
+   */
+  location_name: string;
+  /**
+   * Occupancy rate between 0 and 1 where 1 means full capacity.
+   */
+  occupancy_rate: number;
+  /**
+   * Health/status code for the location. OK = normal, WARNING = near capacity,
+   * CRITICAL = over capacity or urgent attention required.
+   */
+  status_code: "OK" | "WARNING" | "CRITICAL";
+  /**
+   * Number of events observed in the metric window.
+   */
+  event_count: number;
+}
