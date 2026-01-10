@@ -8,7 +8,7 @@ import { Login } from "../components/Login";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { LogisticsAPI } from "../lib/api";
 import { AuthService, User } from "../lib/auth";
-import type { Event, Location } from "../types/logistics";
+import type { Event, Location, LocationStatus } from "../types/logistics";
 
 function toNum(value: unknown): number {
     const n = Number(value);
@@ -35,6 +35,24 @@ function colorForStatus(s: Event["status"]): [number, number, number, number] {
         HOLD: [220, 20, 60, 220],
     };
     return m[s] || [180, 180, 180, 180];
+}
+
+function colorForLocationStatus(code: LocationStatus["status_code"]): [number, number, number, number] {
+    const m: Record<string, [number, number, number, number]> = {
+        GREEN: [0, 200, 83, 210],
+        ORANGE: [255, 140, 0, 220],
+        RED: [220, 20, 60, 220],
+    };
+    return m[code] || [180, 180, 180, 180];
+}
+
+function radiusForLocationStatus(code: LocationStatus["status_code"]): number {
+    const m: Record<string, number> = {
+        GREEN: 160,
+        ORANGE: 200,
+        RED: 240,
+    };
+    return m[code] || 160;
 }
 
 const baseKpiCounts: Record<Event["status"], number> = {
@@ -84,6 +102,9 @@ export default function Home() {
     const [authError, setAuthError] = useState<string | null>(null);
     const [locations, setLocations] = useState<Location[]>([]);
     const [events, setEvents] = useState<Event[]>([]);
+    const [locationStatuses, setLocationStatuses] = useState<Map<string, LocationStatus>>(
+        () => new Map(),
+    );
     const [selected, setSelected] = useState<string>("");
     const [isMapReady, setIsMapReady] = useState(false);
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -149,7 +170,16 @@ export default function Home() {
         setEvents(prev => [event, ...prev].slice(0, 500));
     }, [user]);
 
-    useWebSocket(handleWsEvent);
+    const handleWsLocationStatus = useCallback((status: LocationStatus) => {
+        if (!user) return;
+        setLocationStatuses(prev => {
+            const next = new Map(prev);
+            next.set(status.location_id, status);
+            return next;
+        });
+    }, [user]);
+
+    useWebSocket(handleWsEvent, handleWsLocationStatus);
 
     const latestByShipment = useMemo(() => {
         const map = new Map<string, Event>();
@@ -185,6 +215,15 @@ export default function Home() {
         return out;
     }, [latestByShipment, locations]);
 
+    const locationStatusPoints = useMemo(() => {
+        if (locationStatuses.size === 0) return [];
+        return locations.flatMap(loc => {
+            const status = locationStatuses.get(loc.location_id);
+            if (!status) return [];
+            return [{ ...loc, status_code: status.status_code }];
+        });
+    }, [locations, locationStatuses]);
+
     const layers = [
         new ScatterplotLayer<Location>({
             id: "nodes",
@@ -199,6 +238,14 @@ export default function Home() {
                     // noop for now
                 }
             }
+        }),
+        new ScatterplotLayer<Location & { status_code: LocationStatus["status_code"] }>({
+            id: "location-status",
+            data: locationStatusPoints,
+            pickable: false,
+            getPosition: d => [toNum(d.lon), toNum(d.lat)],
+            getFillColor: d => colorForLocationStatus(d.status_code),
+            getRadius: d => radiusForLocationStatus(d.status_code),
         }),
         new ArcLayer<any>({
             id: "arcs",
@@ -296,6 +343,7 @@ export default function Home() {
         setUser(null);
         setLocations([]);
         setEvents([]);
+        setLocationStatuses(new Map());
         setSelected("");
         setAuthError(null);
     };

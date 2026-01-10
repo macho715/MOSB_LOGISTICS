@@ -1,6 +1,7 @@
 export type LocationType = "MOSB" | "SITE" | "WH" | "PORT" | "BERTH";
 export type ShipmentStatus = "PLANNED" | "IN_TRANSIT" | "ARRIVED" | "DELAYED" | "HOLD";
 export type TransportMode = "ROAD" | "SEA" | "AIR";
+export type LocationStatusCode = "GREEN" | "ORANGE" | "RED";
 
 export interface Location {
   location_id: string;
@@ -38,4 +39,10 @@ export interface Event {
   lat: number;
   lon: number;
   remark: string;
+}
+
+export interface LocationStatus {
+  location_id: string;
+  status_code: LocationStatusCode;
+  ts: string;
 }
