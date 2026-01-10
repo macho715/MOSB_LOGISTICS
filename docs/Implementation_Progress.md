@@ -729,6 +729,20 @@ feat: add server management script and fix frontend user cache crash
 - **2026-01-10**: `next-env.d.ts` 파일 정리 (잘못된 import 제거)
 - **2026-01-10**: 런타임 검증 결과 문서화 (`docs/Runtime_Verification_Results.md`)
 - **2026-01-10**: 서버 재시작 가이드 문서화 (`docs/Server_Restart_Guide.md`)
+- **2026-01-10**: `start-servers.ps1` 스크립트 개선 완료
+  - 자동 `next-env.d.ts` 수정 기능 추가
+  - 자동 `.next` 캐시 정리 기능 추가 (`-CleanCache` 옵션)
+  - 프론트엔드 서버를 새 PowerShell 창에서 실행 (로그 확인 가능)
+  - 글로벌 `NODE_ENV=production` 자동 감지 및 제거
+  - `cross-env` 자동 설치 확인 및 설치 기능
+  - 백엔드 Job 스코프 환경 변수 전달 개선
+  - PowerShell Jobs 정리 기능 강화 (고아 프로세스 방지)
+  - 백엔드 Job ID 추적 기능 추가
+- **2026-01-10**: Step 4 런타임 검증 절차 문서화 완료 (`docs/Runtime_Verification_Results.md`에 추가)
+- **2026-01-10**: `MOSB_Logistics_Dashboard_Phase3_1_Pack` 폴더 아카이브 이동 완료
+  - Phase 3.1 (v0.3.1) 스냅샷을 `archive/` 폴더로 이동
+  - 현재 활성 버전(`mosb_logistics_dashboard_next_fastapi_mvp`)으로 대체 완료
+  - 아카이브 위치: `archive/MOSB_Logistics_Dashboard_Phase3_1_Pack/`
 - **2026-01-10**: Map 초기화 및 WebGL 오류 수정
 - **2026-01-10**: Next.js 16 업데이트
 - **2026-01-10**: 디버그 파일 정리

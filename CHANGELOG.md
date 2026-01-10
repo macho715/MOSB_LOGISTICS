@@ -104,7 +104,17 @@ All notable changes to this project will be documented in this file.
 - Add DuckDB connection recovery policy with reset/memory options
 
 ### Changed
+- Archived `MOSB_Logistics_Dashboard_Phase3_1_Pack` folder to `archive/` directory (2026-01-10)
+  - Phase 3.1 (v0.3.1) snapshot preserved in archive
+  - Superseded by `mosb_logistics_dashboard_next_fastapi_mvp` (Phase 4.1+)
+  - Archive location: `archive/MOSB_Logistics_Dashboard_Phase3_1_Pack/`
+  - Reason: Old version without auth/RBAC features, replaced by current active version with all improvements
 - Updated `docs/Implementation_Progress.md` with Phase 4.1 Client-Only Dashboard implementation details
+- Updated `docs/Runtime_Verification_Results.md` with Step 4 runtime verification procedures (2026-01-10)
+  - Added comprehensive runtime verification checklist (12 sub-steps)
+  - Added improved `start-servers.ps1` script usage guide
+  - Updated verification results summary
+- Updated `README.md` to reflect Next.js 16.1.1, TypeScript 5.9.3, Phase 4.1 completion, and `start-servers.ps1` usage
 - Updated `AGENTS.md` to reflect Next.js 16.1.1 (was 14)
 - Upgraded Next.js from `14.2.0` to `^16.1.1`
 - Upgraded ESLint from `^8.0.0` to `^9.39.2`
