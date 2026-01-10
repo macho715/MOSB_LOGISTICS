@@ -1,6 +1,6 @@
 # AGENTS.md — MOSB Logistics Sleek Ops Dashboard (Next.js + Deck.gl + FastAPI + WS)
 
-You are an AI coding agent working in this repository. Follow this file **strictly**.  
+You are an AI coding agent working in this repository. Follow this file **strictly**.
 If this doc conflicts with repo reality (package.json/pyproject/docker-compose), **repo wins** and you must update this file to match.
 
 ---
@@ -8,7 +8,7 @@ If this doc conflicts with repo reality (package.json/pyproject/docker-compose),
 ## 0) Executive Summary
 
 - 목표: Streamlit보다 기능 많고 세련된 **현장 물류 Ops Dashboard** 구축(멀티페이지/권한/RBAC/실시간/지도 커스텀 레이어).
-- 권장 스택: **Next.js 14 + React 18 + Deck.gl 9 + MapLibre 4 + FastAPI + WebSocket**.
+- 권장 스택: **Next.js 16.1.1 + React 18 + Deck.gl 9 + MapLibre 4 + FastAPI + WebSocket**.
 - 확장성: Port/Berth, Geofence, Heatmap, ETA cone, 이벤트 스트림, 감사로그까지 자연 확장.
 
 EN: For a polished, feature-rich ops dashboard, standardize on **Next.js + Deck.gl + FastAPI + WebSocket**.
@@ -19,9 +19,9 @@ EN: For a polished, feature-rich ops dashboard, standardize on **Next.js + Deck.
 
 Based on current structure review:
 
-- Frontend: **Next.js 14, React 18, Deck.gl 9, MapLibre 4**
+- Frontend: **Next.js 16.1.1, React 18, Deck.gl 9, MapLibre 4**
 - Backend: **FastAPI + WebSocket**
-- Data: **CSV-based**
+- Data: **CSV seeds + DuckDB**
 - UI: **Dark theme**
 - Current data:
   - Locations: **8** (MOSB, WH, SITE×4, PORT, BERTH)
@@ -49,18 +49,16 @@ If any of the above differs in repo, update this section immediately.
 
 ### 3.1 Services / Folders (Do not invent if repo differs)
 
-- `frontend/` or `web/`: Next.js UI
-- `backend/` or `api/`: FastAPI (REST + WS)
-- `data/`: CSV seeds (MVP)
+- `mosb_logistics_dashboard_next_fastapi_mvp/frontend/`: Next.js UI
+- `mosb_logistics_dashboard_next_fastapi_mvp/backend/`: FastAPI (REST + WS)
+- `mosb_logistics_dashboard_next_fastapi_mvp/backend/data/`: CSV seeds (MVP)
 - `infra/`: docker/compose/reverse proxy (optional)
-
-If folder naming differs, align this doc to actual names.
 
 ### 3.2 Canonical Domain Types (Frontend)
 
 Mandatory type file:
 
-- `frontend/types/logistics.ts`
+- `mosb_logistics_dashboard_next_fastapi_mvp/frontend/types/logistics.ts`
 
 Use this canonical contract (keep backward compatible):
 
@@ -112,7 +110,7 @@ export interface Event {
 
 Centralize API access:
 
-- `frontend/lib/api.ts`
+- `mosb_logistics_dashboard_next_fastapi_mvp/frontend/lib/api.ts`
 
 ```ts
 import type { Location, Shipment, Leg, Event } from "../types/logistics";
@@ -159,7 +157,7 @@ export class LogisticsAPI {
 
 Standard hook location:
 
-- `frontend/hooks/useWebSocket.ts`
+- `mosb_logistics_dashboard_next_fastapi_mvp/frontend/hooks/useWebSocket.ts`
 
 Rules:
 
@@ -174,7 +172,7 @@ Rules:
 
 Single source of truth models:
 
-- `backend/models.py`
+- `mosb_logistics_dashboard_next_fastapi_mvp/backend/models.py`
 
 Minimum models:
 
@@ -217,16 +215,16 @@ Assumption (must remain replaceable):
 
 ### 5.1 Frontend (Next.js)
 
-- Install: `cd frontend && npm install` (or pnpm/yarn if repo uses it)
-- Dev: `cd frontend && npm run dev`
-- Lint: `cd frontend && npm run lint`
-- Typecheck: `cd frontend && npm run type-check`
+- Install: `cd mosb_logistics_dashboard_next_fastapi_mvp/frontend && npm install` (or pnpm/yarn if repo uses it)
+- Dev: `cd mosb_logistics_dashboard_next_fastapi_mvp/frontend && npm run dev`
+- Lint: `cd mosb_logistics_dashboard_next_fastapi_mvp/frontend && npm run lint`
+- Typecheck: `cd mosb_logistics_dashboard_next_fastapi_mvp/frontend && npm run type-check`
 
 ### 5.2 Backend (FastAPI)
 
-- Install: `cd backend && pip install -r requirements.txt`
-- Dev: `cd backend && uvicorn main:app --reload --host 0.0.0.0 --port 8000`
-- Test: `cd backend && pytest -q`
+- Install: `cd mosb_logistics_dashboard_next_fastapi_mvp/backend && pip install -r requirements.txt`
+- Dev: `cd mosb_logistics_dashboard_next_fastapi_mvp/backend && uvicorn main:app --reload --host 0.0.0.0 --port 8000`
+- Test: `cd mosb_logistics_dashboard_next_fastapi_mvp/backend && pytest -q`
 
 If repo uses different commands/paths, update this section and keep one canonical set.
 
@@ -238,10 +236,11 @@ Provide examples (must exist in repo as templates).
 
 ### 6.1 Backend
 
-- `backend/.env.example`
+- `mosb_logistics_dashboard_next_fastapi_mvp/backend/.env.example`
 
 ```bash
 DATA_DIR=./data
+LOGISTICS_DB_PATH=./data/logistics.db
 CORS_ORIGINS=http://localhost:3000
 LOG_LEVEL=INFO
 WS_PING_INTERVAL=10
@@ -249,7 +248,7 @@ WS_PING_INTERVAL=10
 
 ### 6.2 Frontend
 
-- `frontend/.env.local.example`
+- `mosb_logistics_dashboard_next_fastapi_mvp/frontend/.env.local.example`
 
 ```bash
 NEXT_PUBLIC_API_BASE=http://localhost:8000
@@ -268,7 +267,7 @@ Rules:
 
 Backend minimal tests:
 
-- `backend/tests/test_main.py`
+- `mosb_logistics_dashboard_next_fastapi_mvp/backend/tests/test_main.py`
 
 Minimum:
 
@@ -319,22 +318,22 @@ If repo already pins versions differently, do not override silently—propose vi
 
 ### Phase 1 (1–2 days): immediate hardening
 
-1) Frontend types file (`types/logistics.ts`)  
-2) API client (`lib/api.ts`)  
-3) WS hook with reconnect policy  
+1) Frontend types file (`types/logistics.ts`)
+2) API client (`lib/api.ts`)
+3) WS hook with reconnect policy
 4) Backend basic error handler + CORS
 
 ### Phase 2 (1 week): reliability
 
-1) Pydantic models + validation  
-2) Backend tests + CI sanity (if CI exists)  
+1) Pydantic models + validation
+2) Backend tests + CI sanity (if CI exists)
 3) env templates + logging
 
 ### Phase 3 (2–4 weeks): scale
 
-1) DB readiness (DuckDB/Postgres) + caching  
-2) AuthN/AuthZ (JWT) + RBAC  
-3) performance optimization (server cache, client memoization)  
+1) DB readiness (DuckDB/Postgres) + caching
+2) AuthN/AuthZ (JWT) + RBAC
+3) performance optimization (server cache, client memoization)
 4) CI/CD pipeline
 
 ---
@@ -348,7 +347,7 @@ If repo already pins versions differently, do not override silently—propose vi
 
 ---
 
-## 11) “Ask Mode” vs “Agent Mode” Rule
+## 11) "Ask Mode" vs "Agent Mode" Rule
 
 - In **Ask Mode**: provide designs, diffs, and exact file paths; do not modify code.
 - In **Agent Mode**: you may implement changes, run checks, and propose PR-ready commits.
@@ -369,8 +368,8 @@ If asked to implement, switch to Agent Mode explicitly and follow:
 
 Next expansion targets (once MVP stable):
 
-1) `legs.csv` 기반 정확한 PathLayer  
-2) Geofence 진입/이탈 이벤트  
+1) `legs.csv` 기반 정확한 PathLayer
+2) Geofence 진입/이탈 이벤트
 3) Role-based RBAC (Ops/Finance/Compliance)
 
 ---

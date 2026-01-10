@@ -176,6 +176,39 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 ---
 
+## Location Status Monitoring (2026-01-10)
+
+**작업일**: 2026-01-10  
+**상태**: ✅ 완료
+
+### 구현 내용
+
+#### 1. Backend Location Status
+- `LocationStatus` 모델 추가 (`backend/models.py`)
+- DuckDB `location_status` 테이블 추가 (`backend/db.py`)
+- API 엔드포인트 추가:
+  - `GET /api/location-status`
+  - `POST /api/location-status/update`
+- WebSocket 브로드캐스트: `type: "location_status"`
+- 유효성 검증:
+  - `location_id` 존재 여부 확인
+  - `last_updated` ISO8601 및 미래 시간 방지
+
+#### 2. Frontend 연동
+- 타입 추가 (`frontend/types/logistics.ts`)
+- API 클라이언트 추가 (`frontend/lib/api.ts`)
+- WS 훅 확장 (`frontend/hooks/useWebSocket.ts`)
+- 대시보드 노드 색상/크기/툴팁 상태 반영 (`frontend/pages/index.tsx`)
+
+#### 3. 테스트
+- `backend/tests/test_location_status.py` 추가
+  - Location status 조회
+  - 업데이트 후 조회 반영
+  - 알 수 없는 `location_id` 거부
+  - 미래 `last_updated` 거부
+
+---
+
 ## 프로젝트 구조 정리 및 문제 해결 (2026-01-09)
 
 **작업일**: 2026-01-09

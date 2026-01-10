@@ -2,7 +2,8 @@
 
 **작성일**: 2026-01-08
 **프로젝트**: MOSB Logistics Live Map MVP v2
-**버전**: 1.0
+**버전**: 1.2
+**최종 업데이트**: 2026-01-10
 
 ---
 
@@ -29,6 +30,19 @@ MOSB Logistics Dashboard는 실시간 물류 추적 및 운영 관리를 위한 
 - **실시간 이벤트 스트리밍**: WebSocket 기반 실시간 업데이트
 - **역할 기반 접근 제어**: JWT + RBAC 기반 보안
 - **성능 최적화**: 서버/클라이언트 캐싱
+- **Client-Only Dashboard** (Phase 4.1, 2026-01-10)
+  - 클라이언트 사이드 지오펜스 필터링 및 판정
+  - 히트맵 집계 및 시각화
+  - ETA 웨지 계산 및 3D 시각화
+  - Zustand 기반 상태 관리
+  - 배치 WebSocket 처리 (500ms)
+  - MapLibre + DeckGL 동기화
+- **Location Status Monitoring** (2026-01-10)
+  - Location별 점유율/상태(OK/WARNING/CRITICAL) 추적
+  - REST: `GET /api/location-status`, `POST /api/location-status/update`
+  - WebSocket: `type: "location_status"` 브로드캐스트
+  - 캐시 TTL 30초 적용
+  - 노드 색상/크기/툴팁 상태 반영
 
 ---
 
@@ -44,11 +58,12 @@ graph TB
     end
 
     subgraph "Frontend Components"
-        Pages[Pages<br/>index.tsx]
-        Components[Components<br/>Login.tsx]
-        Hooks[Hooks<br/>useWebSocket.ts]
-        Lib[Lib<br/>api.ts, auth.ts]
-        Types[Types<br/>logistics.ts]
+        Pages[Pages<br/>index.tsx<br/>dashboard-client-only.tsx]
+        Components[Components<br/>Login.tsx<br/>ClientOnlyDashboard/Map]
+        Hooks[Hooks<br/>useWebSocket.ts<br/>useBatchedClientOnlyWs.ts]
+        Lib[Lib<br/>api.ts, auth.ts<br/>client-only/geofence/heatmap/eta]
+        Store[Store<br/>useClientOnlyStore.ts<br/>Zustand]
+        Types[Types<br/>logistics.ts<br/>clientOnly.ts]
     end
 
     subgraph "API Layer"
@@ -72,7 +87,9 @@ graph TB
     Pages --> Components
     Pages --> Hooks
     Pages --> Lib
+    Pages --> Store
     Lib --> Types
+    Store --> Types
 
     UI -->|HTTP + JWT| REST
     UI -->|WebSocket| WS
@@ -195,12 +212,34 @@ erDiagram
 - KPI 표시
 - 이벤트 타임라인
 
+**`pages/dashboard-client-only.tsx`** (Phase 4.1, 2026-01-10)
+- Client-Only Dashboard 페이지
+- 클라이언트 사이드 데이터 처리
+- 지오펜스 필터링 및 판정
+- 히트맵 집계 및 시각화
+- ETA 웨지 계산 및 3D 시각화
+
 #### 2. 컴포넌트
 
 **`components/Login.tsx`**
 - 로그인 폼
 - 사용자 인증 UI
 - 에러 처리
+
+**`components/client-only/ClientOnlyDashboard.tsx`** (Phase 4.1)
+- Client-Only Dashboard 컨테이너
+- KPI 패널 표시
+- 레이어 토글 컨트롤
+- 초기 데이터 로딩
+
+**`components/client-only/ClientOnlyMap.tsx`** (Phase 4.1)
+- MapLibre + DeckGL 동기화
+- GeoJsonLayer (지오펜스)
+- ScatterplotLayer (이벤트 포인트)
+- ArcLayer (레그 시각화)
+- HeatmapLayer (이벤트 밀도)
+- SolidPolygonLayer (ETA 웨지)
+- TextLayer (위치 레이블)
 
 #### 3. 라이브러리
 
@@ -215,6 +254,22 @@ erDiagram
 - 사용자 정보 캐싱
 - 역할 체크 헬퍼
 
+**`lib/client-only/geofence.ts`** (Phase 4.1)
+- 지오펜스 인덱스 구축 (BBox 최적화)
+- Point-in-polygon 판정 (Turf.js)
+
+**`lib/client-only/heatmap.ts`** (Phase 4.1)
+- 히트맵 데이터 집계
+- 상태 기반 가중치 계산
+
+**`lib/client-only/eta.ts`** (Phase 4.1)
+- ETA 웨지 계산 (대권거리 기반)
+- 3D 폴리곤 생성
+
+**`lib/client-only/ws.ts`** (Phase 4.1)
+- WebSocket 메시지 파싱
+- 이벤트 변환 (LiveEvent)
+
 #### 4. 훅
 
 **`hooks/useWebSocket.ts`**
@@ -222,11 +277,39 @@ erDiagram
 - 자동 재연결
 - 메시지 파싱
 
+**`hooks/useBatchedClientOnlyWs.ts`** (Phase 4.1)
+- 배치 WebSocket 처리 (500ms)
+- React 리렌더링 최적화
+
+**`hooks/useClientOnlyGeofences.ts`** (Phase 4.1)
+- GeoJSON 지오펜스 데이터 로딩
+- Zustand 스토어 통합
+
 #### 5. 타입 정의
 
 **`types/logistics.ts`**
 - 도메인 타입 정의
 - TypeScript 인터페이스
+
+#### 6. 상태 관리
+
+**`store/useClientOnlyStore.ts`** (Phase 4.1)
+- Zustand 기반 상태 관리
+- 이벤트 슬라이딩 윈도우 (MAX_EVENTS)
+- Shipment 데이터 유도 (이벤트 기반)
+- 지오펜스 인덱스 관리
+
+#### 7. 타입 정의
+
+**`types/logistics.ts`**
+- 도메인 타입 정의
+- TypeScript 인터페이스
+
+**`types/clientOnly.ts`** (Phase 4.1)
+- Client-Only Dashboard 타입
+- GeoJSON 타입
+- LiveEvent, AnnotatedEvent 타입
+- HeatPoint, EtaWedge 타입
 
 ### Backend (FastAPI)
 
@@ -415,11 +498,17 @@ sequenceDiagram
 
 | 계층 | 기술 | 버전 | 용도 |
 |------|------|------|------|
-| Framework | Next.js | 14.2.0 | React 프레임워크 |
+| Framework | Next.js | 16.1.1 | React 프레임워크 |
 | UI Library | React | 18.2.0 | UI 컴포넌트 |
 | Map Engine | Deck.gl | 9.0.0 | 지도 레이어 렌더링 |
 | Map Provider | MapLibre | 4.0.0 | 지도 타일 제공 |
-| Language | TypeScript | 5.0.0 | 타입 안전성 |
+| Language | TypeScript | 5.9.3 | 타입 안전성 |
+| State Management | Zustand | 4.5.2 | 클라이언트 상태 관리 (Phase 4.1) |
+| Geospatial | Turf.js | 7.0.0 | 지리공간 분석 (Phase 4.1) |
+| Deck.gl Extensions | @deck.gl/aggregation-layers | 9.0.0 | 히트맵 레이어 (Phase 4.1) |
+| Deck.gl Extensions | @deck.gl/extensions | 9.0.0 | 마스크 확장 (Phase 4.1) |
+| Geofence | @turf/boolean-point-in-polygon | 7.0.0 | 지오펜스 판정 (Phase 4.1) |
+| Environment | cross-env | 7.0.3 | 환경 변수 관리 |
 
 ### Backend
 
@@ -683,8 +772,17 @@ graph TB
 
 - **2026-01-08**: 초기 아키텍처 문서 작성
 - **2026-01-08**: Phase 3.1, 3.2 반영
+- **2026-01-10**: Phase 4.1 Client-Only Dashboard 반영
+  - 클라이언트 사이드 지오펜스 필터링 및 판정
+  - 히트맵 집계 및 시각화
+  - ETA 웨지 계산 및 3D 시각화
+  - Zustand 기반 상태 관리
+  - 배치 WebSocket 처리 (500ms)
+  - MapLibre + DeckGL 동기화
+  - 기술 스택 업데이트 (Next.js 16.1.1, TypeScript 5.9.3)
+  - 시스템 구성 요소 업데이트 (Client-Only Dashboard 컴포넌트 추가)
 
 ---
 
-**문서 버전**: 1.1
-**최종 업데이트**: 2026-01-08
+**문서 버전**: 1.2
+**최종 업데이트**: 2026-01-10
