@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from cache import CacheManager
 from db import Database
-from models import Event, Leg, Location, Shipment
+from models import Event, Leg, Location, Shipment, LocationStatus, derive_status_code
 from auth import (
     authenticate_user,
     create_access_token,
@@ -31,6 +31,7 @@ WS_PING_INTERVAL = int(os.getenv("WS_PING_INTERVAL", "10"))
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
+
 def read_csv(path: str) -> List[Dict[str, Any]]:
     if not os.path.exists(path):
         return []
@@ -38,18 +39,21 @@ def read_csv(path: str) -> List[Dict[str, Any]]:
         reader = csv.DictReader(f)
         return list(reader)
 
+
 def append_event(event: Dict[str, Any]) -> None:
     path = os.path.join(DATA_DIR, "events.csv")
     exists = os.path.exists(path)
-    fieldnames = ["event_id","ts","shpt_no","status","location_id","lat","lon","remark"]
+    fieldnames = ["event_id", "ts", "shpt_no", "status", "location_id", "lat", "lon", "remark"]
     with open(path, "a", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         if not exists:
             w.writeheader()
         w.writerow({k: event.get(k, "") for k in fieldnames})
 
+
 def iso_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
 
 def parse_iso_ts(value: str) -> Optional[datetime]:
     if not value:
@@ -62,6 +66,7 @@ def parse_iso_ts(value: str) -> Optional[datetime]:
     except ValueError:
         return None
 
+
 def parse_rows(rows: List[Dict[str, Any]], model: Type[BaseModel], label: str):
     parsed = []
     for row in rows:
@@ -70,6 +75,7 @@ def parse_rows(rows: List[Dict[str, Any]], model: Type[BaseModel], label: str):
         except Exception as exc:
             logger.warning("Skipping %s row: %s", label, exc)
     return parsed
+
 
 db = Database()
 cache = CacheManager()
@@ -91,19 +97,60 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.on_event("startup")
 async def startup_log() -> None:
     """KR: 앱 시작 로그를 남깁니다. EN: Log application startup."""
     logger.info("MOSB Logistics API startup")
 
+
 @app.on_event("shutdown")
 async def shutdown_cleanup() -> None:
-    """KR: 앱 종료 시 DB 연결을 닫습니다. EN: Close DB connection on shutdown."""
-    logger.info("MOSB Logistics API shutdown")
+    """
+    KR: 앱 종료 시 리소스를 정리합니다.
+    - WebSocket 연결 종료
+    - 캐시 정리
+    - DB 연결 종료
+
+    EN: Clean up resources on application shutdown.
+    - Close WebSocket connections
+    - Clear cache
+    - Close DB connection
+    """
+    logger.info("MOSB Logistics API shutdown initiated")
+
+    # 1. WebSocket 클라이언트 연결 종료
+    try:
+        if hub.clients:
+            logger.info("Closing %d WebSocket client connections", len(hub.clients))
+            disconnected = 0
+            for ws in list(hub.clients):
+                try:
+                    await ws.close()
+                    disconnected += 1
+                except Exception as exc:
+                    logger.debug("Error closing WebSocket: %s", exc)
+            hub.clients.clear()
+            logger.info("Closed %d WebSocket connections", disconnected)
+    except Exception as exc:
+        logger.warning("WebSocket cleanup failed on shutdown: %s", exc)
+
+    # 2. 캐시 정리
+    try:
+        cache.invalidate_all()
+        logger.debug("Cache cleared on shutdown")
+    except Exception as exc:
+        logger.warning("Cache cleanup failed on shutdown: %s", exc)
+
+    # 3. DB 연결 종료
     try:
         db.close()
+        logger.info("Database connection closed")
     except Exception as exc:
         logger.warning("DB close failed on shutdown: %s", exc)
+
+    logger.info("MOSB Logistics API shutdown complete")
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -113,12 +160,14 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"error": "Internal server error"},
     )
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": exc.detail},
     )
+
 
 @app.post("/api/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -134,9 +183,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+
 @app.get("/api/auth/me", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
 
 @app.get("/api/locations", response_model=list[Location])
 def get_locations(current_user: User = Depends(get_current_user)):
@@ -152,6 +203,7 @@ def get_locations(current_user: User = Depends(get_current_user)):
     cache.set_cached_locations("all", locations)
     return locations
 
+
 @app.get("/api/legs", response_model=list[Leg])
 def get_legs(current_user: User = Depends(get_current_user)):
     cached = cache.get_cached_legs()
@@ -166,6 +218,7 @@ def get_legs(current_user: User = Depends(get_current_user)):
     cache.set_cached_legs("all", legs)
     return legs
 
+
 @app.get("/api/shipments", response_model=list[Shipment])
 def get_shipments(current_user: User = Depends(require_role(["OPS", "FINANCE", "ADMIN"]))):
     cached = cache.get_cached_shipments()
@@ -179,6 +232,7 @@ def get_shipments(current_user: User = Depends(require_role(["OPS", "FINANCE", "
         shipments = parse_rows(rows, Shipment, "shipment")
     cache.set_cached_shipments("all", shipments)
     return shipments
+
 
 @app.get("/api/events", response_model=list[Event])
 def get_events(since: Optional[str] = None, current_user: User = Depends(get_current_user)):
@@ -207,6 +261,52 @@ def get_events(since: Optional[str] = None, current_user: User = Depends(get_cur
     cache.set_cached_events(cache_key, events)
     return events
 
+
+# Location status endpoints
+
+
+@app.get("/api/location-status", response_model=list[LocationStatus])
+def get_location_status_api(current_user: User = Depends(get_current_user)):
+    """
+    Return the latest status for all locations.
+    """
+    cached = cache.get_cached_location_status()
+    if cached is not None:
+        return cached
+    try:
+        status_list = db.get_location_status()
+    except Exception as exc:
+        logger.warning("DB location status fetch failed: %s", exc)
+        status_list = []
+    cache.set_cached_location_status("all", status_list)
+    return status_list
+
+
+@app.post("/api/location-status/update")
+async def update_location_status_api(
+    status: LocationStatus, current_user: User = Depends(require_role(["OPS", "ADMIN"]))
+) -> dict[str, bool]:
+    """
+    Update or insert a location status record.
+    """
+    try:
+        location_ids = {loc.location_id for loc in db.get_locations()}
+    except Exception as exc:
+        logger.warning("Location validation failed: %s", exc)
+        raise HTTPException(status_code=400, detail="Location validation failed") from exc
+    if status.location_id not in location_ids:
+        raise HTTPException(status_code=400, detail=f"Unknown location_id: {status.location_id}")
+    if status.status_code is None:
+        status = status.model_copy(
+            update={"status_code": derive_status_code(status.occupancy_rate)}
+        )
+    db.upsert_location_status(status)
+    cache.invalidate_location_status()
+    # broadcast update to websocket clients
+    await hub.broadcast({"type": "location_status", "payload": status.model_dump()})
+    return {"ok": True}
+
+
 # Simple websocket broadcaster
 class Hub:
     def __init__(self):
@@ -232,25 +332,30 @@ class Hub:
         for c in dead:
             self.disconnect(c)
 
+
 hub = Hub()
+
 
 @app.websocket("/ws/events")
 async def ws_events(ws: WebSocket):
     await hub.connect(ws)
     try:
         # Send a hello payload
-        await ws.send_json({"type":"hello","ts":iso_now()})
+        await ws.send_json({"type": "hello", "ts": iso_now()})
         while True:
             # Keepalive ping; clients can ignore
-            await ws.send_json({"type":"ping","ts":iso_now()})
+            await ws.send_json({"type": "ping", "ts": iso_now()})
             await asyncio_sleep(WS_PING_INTERVAL)
     except WebSocketDisconnect:
         hub.disconnect(ws)
 
+
 # Avoid importing asyncio at top for readability
 async def asyncio_sleep(sec: int):
     import asyncio
+
     await asyncio.sleep(sec)
+
 
 @app.post("/api/events/demo")
 async def post_demo_event(current_user: User = Depends(require_role(["OPS", "ADMIN"]))):
@@ -275,5 +380,5 @@ async def post_demo_event(current_user: User = Depends(require_role(["OPS", "ADM
         logger.warning("DB event append failed: %s", exc)
     append_event(payload)
     cache.invalidate_events()
-    await hub.broadcast({"type":"event","payload":payload})
+    await hub.broadcast({"type": "event", "payload": payload})
     return {"ok": True, "event": event}

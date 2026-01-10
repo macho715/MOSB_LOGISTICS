@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Location status monitoring** (2026-01-10)
+  - `LocationStatus` model + DuckDB table
+  - `GET /api/location-status` and `POST /api/location-status/update`
+  - WebSocket broadcast for `location_status`
+  - Frontend node color/size and tooltip driven by status
 - **Improved `start-servers.ps1` script** (2026-01-10)
   - Auto-fix `next-env.d.ts`: Automatically removes invalid `import "./.next/dev/types/routes.d.ts"` with improved regex handling (Windows/Unix line endings)
   - Cache cleanup option: `-CleanCache` parameter to clean `.next` cache
@@ -56,11 +61,24 @@ All notable changes to this project will be documented in this file.
 - `docs/kr/server-ops.md`: Server operations guide (Korean)
 - MapLibre CSS import in `_app.tsx` for proper map rendering
 
+### Changed
+- **Improved shutdown event hook in `main.py`** (2026-01-10)
+  - Enhanced graceful shutdown with proper resource cleanup
+  - WebSocket clients are now properly closed on shutdown
+  - Cache is cleared on shutdown
+  - Database connection is closed gracefully
+  - Better logging for shutdown process with detailed cleanup steps
+
 ### Fixed
+- Location status validation (2026-01-10)
+  - Rejects unknown `location_id`
+  - Validates ISO8601 `last_updated` and rejects future timestamps
 - **Fixed `next-env.d.ts` invalid import** (2026-01-10)
   - Removed `import "./.next/dev/types/routes.d.ts"` from `next-env.d.ts`
   - Prevents JSX runtime errors (`jsxDEV is not a function`)
-  - Auto-fixed by improved `start-servers.ps1` script
+  - Auto-fixed by improved `start-servers.ps1` script (`Fix-NextEnvDts` function)
+  - Added `predev` and `prebuild` hooks in `package.json` to automatically fix if Next.js regenerates the file
+  - Created `scripts/fix-next-env-dts.js` for manual fixing or npm script hooks
 - **Fixed `start-servers.ps1` frontend execution issues** (2026-01-10)
   - Changed from `Start-Job` to `Start-Process` with new PowerShell window
   - Ensures `cross-env` works correctly
@@ -74,6 +92,19 @@ All notable changes to this project will be documented in this file.
   - Improved `Fix-NextEnvDts`: Handles edge cases with whitespace, multiple line endings, and consecutive empty lines
   - Enhanced port cleanup: Waits up to 5 seconds for port release, better process termination
   - PowerShell Jobs cleanup: `Stop-ServerOnPort` now also stops related Jobs, preventing orphaned processes
+- **Fixed `start-servers.ps1` `-FrontendOnly`/`-BackendOnly` flags process check bug** (2026-01-10)
+  - Fixed bug where `-FrontendOnly` or `-BackendOnly` flags skipped checking opposite service ports
+  - Now checks both Backend (port 8000) and Frontend (port 3000) to detect running services
+  - Only terminates the service being started (preserves opposite service when using flags)
+  - Added informational messages when opposite service is running (e.g., Backend running when using `-FrontendOnly`)
+  - Script only exits on failure if the service being started has port conflicts
+  - Prevents orphaned processes when starting one service while the other is already running
+  - Fixed environment variable assignment syntax error in Start-Job script block (line 214)
+- **Fixed `.gitignore` pattern bugs** (2026-01-10)
+  - Fixed pattern `"Minimal, drop‑in code*.ts"` which used Unicode non-breaking hyphen (U+2011)
+  - Changed to regular hyphen (U+002D) for proper glob matching: `Minimal, drop-in code*.ts`
+  - Removed quotes from pattern (quotes are treated as literal characters in `.gitignore`)
+  - Pattern now correctly matches filenames with regular hyphens (e.g., `Minimal, drop-in code-something.ts`)
 - TypeScript compilation errors in Client-Only Dashboard (2026-01-10)
   - Fixed `GeoJsonLayer` import path: `@deck.gl/geo-layers` → `@deck.gl/layers`
   - Fixed `GeoFenceIndex` import: moved from `types/clientOnly.ts` to `lib/client-only/geofence.ts`
@@ -117,6 +148,7 @@ All notable changes to this project will be documented in this file.
 - Updated `README.md` to reflect Next.js 16.1.1, TypeScript 5.9.3, Phase 4.1 completion, and `start-servers.ps1` usage
 - Updated `AGENTS.md` to reflect Next.js 16.1.1 (was 14)
 - Upgraded Next.js from `14.2.0` to `^16.1.1`
+- Upgraded TypeScript from `5.0.0` to `5.9.3`
 - Upgraded ESLint from `^8.0.0` to `^9.39.2`
 - Upgraded `eslint-config-next` from `^14.2.0` to `^16.1.1`
 - Improved MapLibre initialization logic with proper lifecycle management
