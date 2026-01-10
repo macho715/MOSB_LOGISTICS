@@ -16,6 +16,8 @@ class CacheManager:
         self.events_cache = TTLCache(maxsize=500, ttl=60)
         # Cache for location status with shorter TTL (30s) due to frequent changes.
         self.location_status_cache = TTLCache(maxsize=100, ttl=30)
+        # Cache for location metrics (events/status) with shorter TTL (30s).
+        self.location_metrics_cache = TTLCache(maxsize=100, ttl=30)
 
     def get_cached_locations(self, key: str = "all") -> Optional[List]:
         return self.locations_cache.get(key)
@@ -71,12 +73,25 @@ class CacheManager:
         """Clear cached location status."""
         self.location_status_cache.clear()
 
+    def get_cached_location_metrics(self, key: str = "all") -> Optional[List]:
+        """KR: 위치 지표 캐시를 반환합니다. EN: Return cached location metrics."""
+        return self.location_metrics_cache.get(key)
+
+    def set_cached_location_metrics(self, key: str, value: List) -> None:
+        """KR: 위치 지표 캐시를 저장합니다. EN: Cache location metrics."""
+        self.location_metrics_cache[key] = value
+
+    def invalidate_location_metrics(self) -> None:
+        """KR: 위치 지표 캐시를 비웁니다. EN: Clear cached location metrics."""
+        self.location_metrics_cache.clear()
+
     def invalidate_all(self) -> None:
         self.invalidate_locations()
         self.invalidate_shipments()
         self.invalidate_legs()
         self.invalidate_events()
         self.invalidate_location_status()
+        self.invalidate_location_metrics()
 
 
 def cache_response(ttl: int = 300):

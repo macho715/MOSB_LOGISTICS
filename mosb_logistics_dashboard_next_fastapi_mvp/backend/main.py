@@ -15,7 +15,16 @@ from pydantic import BaseModel
 
 from cache import CacheManager
 from db import Database
-from models import Event, Leg, Location, Shipment, LocationStatus, LocationStatusUpdate, derive_status_code
+from models import (
+    Event,
+    Leg,
+    Location,
+    Shipment,
+    LocationMetric,
+    LocationStatus,
+    LocationStatusUpdate,
+    derive_status_code,
+)
 from auth import (
     authenticate_user,
     create_access_token,
@@ -265,6 +274,28 @@ def get_events(since: Optional[str] = None, current_user: User = Depends(get_cur
     return events
 
 
+# Location metrics endpoints
+
+
+@app.get("/api/location-metrics", response_model=list[LocationMetric])
+def get_location_metrics_api(
+    since: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+):
+    """KR: 위치 지표를 반환합니다. EN: Return location metrics."""
+    cache_key = f"location_metrics:{since or 'all'}"
+    cached = cache.get_cached_location_metrics(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        metrics = db.get_location_metrics(since)
+    except Exception as exc:
+        logger.warning("DB location metrics fetch failed: %s", exc)
+        metrics = []
+    cache.set_cached_location_metrics(cache_key, metrics)
+    return metrics
+
+
 # Location status endpoints
 
 
@@ -314,6 +345,7 @@ async def update_location_status_api(
 
     db.upsert_location_status(status)
     cache.invalidate_location_status()
+    cache.invalidate_location_metrics()
     # broadcast update to websocket clients (always non-null status_code)
     await hub.broadcast({"type": "location_status", "payload": status.model_dump()})
     return {"ok": True}
@@ -392,5 +424,6 @@ async def post_demo_event(current_user: User = Depends(require_role(["OPS", "ADM
         logger.warning("DB event append failed: %s", exc)
     append_event(payload)
     cache.invalidate_events()
+    cache.invalidate_location_metrics()
     await hub.broadcast({"type": "event", "payload": payload})
     return {"ok": True, "event": event}

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field, field_validator
-from typing import Literal
+from typing import Literal, Optional
 
 
 class Location(BaseModel):
@@ -97,6 +97,16 @@ class LocationStatus(BaseModel):
         if dt > now + timedelta(seconds=5):
             raise ValueError("last_updated cannot be in the future")
         return value
+
+
+class LocationMetric(BaseModel):
+    """KR: 위치별 이벤트/상태 지표입니다. EN: Aggregated event/status metrics per location."""
+
+    location_id: str
+    occupancy_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    status_code: Optional[Literal["OK", "WARNING", "CRITICAL"]] = None
+    last_updated: Optional[str] = None
+    event_count: int = Field(default=0, ge=0)
 
 
 def derive_status_code(occupancy_rate: float) -> Literal["OK", "WARNING", "CRITICAL"]:
