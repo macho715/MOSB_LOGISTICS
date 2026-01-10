@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Location metrics for client-only map** (2026-01-10)
+  - `LocationMetric` type, API call, and Zustand store integration
+  - Map circles/labels now use status, occupancy rate, and event counts from metrics
 - **Location status monitoring** (2026-01-10)
   - `LocationStatus` model + DuckDB table
   - `GET /api/location-status` and `POST /api/location-status/update`
