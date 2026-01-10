@@ -5,24 +5,31 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List, Type
+from typing import Any, Dict, List, Optional, Type
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
-
-from cache import CacheManager
-from db import Database
-from models import Event, Leg, Location, Shipment
 from auth import (
+    Token,
+    User,
     authenticate_user,
     create_access_token,
     get_current_user,
-    Token,
-    User,
 )
+from cache import CacheManager
+from db import Database
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from models import Event, Leg, Location, LocationStatus, LocationStatusUpdate, Shipment
+from pydantic import BaseModel
 from rbac import require_role
 
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(os.path.dirname(__file__), "data"))
@@ -71,8 +78,34 @@ def parse_rows(rows: List[Dict[str, Any]], model: Type[BaseModel], label: str):
             logger.warning("Skipping %s row: %s", label, exc)
     return parsed
 
+
+def fetch_locations() -> list[Location]:
+    """KR: 위치 목록을 조회합니다. EN: Fetch location list."""
+    cached = cache.get_cached_locations()
+    if cached is not None:
+        return cached
+    try:
+        locations = db.get_locations()
+    except Exception as exc:
+        logger.warning("DB locations fetch failed: %s", exc)
+        rows = read_csv(os.path.join(DATA_DIR, "locations.csv"))
+        locations = parse_rows(rows, Location, "location")
+    cache.set_cached_locations("all", locations)
+    return locations
+
+
+def derive_status_code(status_value: str) -> str:
+    """KR: 상태 값을 코드로 변환합니다. EN: Derive status code from status."""
+    mapping = {
+        "OK": "GREEN",
+        "WARN": "AMBER",
+        "CRITICAL": "RED",
+    }
+    return mapping[status_value]
+
 db = Database()
 cache = CacheManager()
+location_status_store: Dict[str, LocationStatus] = {}
 
 app = FastAPI(title="MOSB Logistics Live API", version="0.1.0")
 
@@ -140,17 +173,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 
 @app.get("/api/locations", response_model=list[Location])
 def get_locations(current_user: User = Depends(get_current_user)):
-    cached = cache.get_cached_locations()
-    if cached is not None:
-        return cached
-    try:
-        locations = db.get_locations()
-    except Exception as exc:
-        logger.warning("DB locations fetch failed: %s", exc)
-        rows = read_csv(os.path.join(DATA_DIR, "locations.csv"))
-        locations = parse_rows(rows, Location, "location")
-    cache.set_cached_locations("all", locations)
-    return locations
+    return fetch_locations()
 
 @app.get("/api/legs", response_model=list[Leg])
 def get_legs(current_user: User = Depends(get_current_user)):
@@ -206,6 +229,50 @@ def get_events(since: Optional[str] = None, current_user: User = Depends(get_cur
                 events = parse_rows(out, Event, "event")
     cache.set_cached_events(cache_key, events)
     return events
+
+
+@app.get("/api/location-status", response_model=list[LocationStatus])
+def get_location_status(current_user: User = Depends(get_current_user)):
+    """KR: 위치 상태 목록을 반환합니다. EN: Return location status list."""
+    cached = cache.get_cached_location_status()
+    if cached is not None:
+        return cached
+    statuses = list(location_status_store.values())
+    cache.set_cached_location_status("all", statuses)
+    return statuses
+
+
+@app.post("/api/location-status", response_model=LocationStatus)
+def post_location_status(
+    payload: LocationStatusUpdate,
+    current_user: User = Depends(require_role(["OPS", "ADMIN"])),
+):
+    """KR: 위치 상태를 업데이트합니다. EN: Update location status."""
+    locations = fetch_locations()
+    location_ids = {location.location_id for location in locations}
+    if payload.location_id not in location_ids:
+        raise HTTPException(status_code=404, detail="Unknown location_id")
+    ts = parse_iso_ts(payload.ts)
+    if not ts:
+        raise HTTPException(status_code=400, detail="Invalid ts format")
+    if ts > datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Future ts is not allowed")
+    existing = location_status_store.get(payload.location_id)
+    if existing:
+        existing_ts = parse_iso_ts(existing.ts)
+        if existing_ts and ts <= existing_ts:
+            raise HTTPException(status_code=409, detail="Out-of-order ts update")
+    status_code = derive_status_code(payload.status)
+    record = LocationStatus(
+        location_id=payload.location_id,
+        ts=payload.ts,
+        status=payload.status,
+        status_code=status_code,
+        remark=payload.remark,
+    )
+    location_status_store[payload.location_id] = record
+    cache.invalidate_location_status()
+    return record
 
 # Simple websocket broadcaster
 class Hub:

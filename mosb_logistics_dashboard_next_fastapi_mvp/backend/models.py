@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
 from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class Location(BaseModel):
@@ -41,3 +42,23 @@ class EventCreate(BaseModel):
 class Event(EventCreate):
     event_id: str
     ts: str
+
+
+class LocationStatusUpdate(BaseModel):
+    """KR: 위치 상태 업데이트 요청입니다. EN: Location status update request."""
+
+    location_id: str
+    ts: str
+    status: Literal["OK", "WARN", "CRITICAL"]
+    status_code: str | None = None
+    remark: str = ""
+
+
+class LocationStatus(BaseModel):
+    """KR: 위치 상태 응답 모델입니다. EN: Location status response model."""
+
+    location_id: str
+    ts: str
+    status: Literal["OK", "WARN", "CRITICAL"]
+    status_code: Literal["GREEN", "AMBER", "RED"]
+    remark: str = ""
