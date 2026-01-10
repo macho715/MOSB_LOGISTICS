@@ -492,8 +492,225 @@ feat: add server management script and fix frontend user cache crash
 - ✅ WebGL 오류 해결
 - ⏳ Map 표시 테스트 진행 중
 
+## Phase 4.1: Client-Only Dashboard 구현 완료
+
+**완료일**: 2026-01-10
+**상태**: ✅ 완료
+
+### 구현 내용
+
+#### 1. Client-Only 아키텍처
+- 새 라우트 `/dashboard-client-only` 추가 (기존 `/index.tsx` 변경 없음)
+- 모든 도메인 로직을 브라우저에서 수행 (지오펜스 판정, 히트맵 집계, ETA 계산)
+- 서버 부하 최소화, 빠른 프로토타이핑 가능
+
+#### 2. 타입 정의 (`frontend/types/clientOnly.ts`)
+- `LiveEvent`, `AnnotatedEvent`: WebSocket 이벤트 타입
+- `ClientShipment`, `ShipmentLeg`: 클라이언트 전용 shipment 타입
+- `GeoFenceCollection`, `GeoFenceFeature`: 지오펜스 GeoJSON 타입
+- `HeatPoint`, `EtaWedge`: 히트맵 및 ETA 시각화 타입
+
+#### 3. 상태 관리 (`frontend/store/useClientOnlyStore.ts`)
+- Zustand 기반 전역 상태 관리
+- `eventsById` + `eventIds` 구조로 중복 제거 및 sliding window 관리
+- 최대 1000개 이벤트 캡 (메모리 관리)
+- 지오펜스 인덱싱 (BBox 사전 필터링으로 성능 최적화)
+- 이벤트에서 shipment 자동 파생 (`deriveShipmentsFromEvents`)
+
+#### 4. 지오펜스 유틸리티 (`frontend/lib/client-only/geofence.ts`)
+- BBox 사전 필터링으로 성능 최적화
+- `@turf/boolean-point-in-polygon` 사용
+- Polygon/MultiPolygon 지원
+
+#### 5. 히트맵 유틸리티 (`frontend/lib/client-only/heatmap.ts`)
+- 상태 기반 가중치 (DELAYED > HOLD > IN_TRANSIT)
+- `enter`/`exit` 이벤트 가중치 증가
+- iOS Safari 안전 범위 (1-255)
+
+#### 6. ETA 계산 (`frontend/lib/client-only/eta.ts`)
+- Great-circle 거리 계산 (Haversine)
+- Bearing 계산
+- Wedge polygon 생성 (SolidPolygonLayer용)
+- 상태 기반 불확실성 모델
+
+#### 7. WebSocket 파서 (`frontend/lib/client-only/ws.ts`)
+- 현재 백엔드 형식 지원: `{type: "event", payload: {...}}`
+- `ping`/`hello` 메시지 무시
+- 기존 `Event` 타입을 `LiveEvent`로 변환
+
+#### 8. 배치 처리 WebSocket 훅 (`frontend/hooks/useBatchedClientOnlyWs.ts`)
+- 500ms 배치 처리로 React 렌더링 최소화
+- 재연결 백오프 (최대 10초)
+- 토큰 지원 (쿼리 파라미터)
+
+#### 9. GeoJSON 로더 훅 (`frontend/hooks/useClientOnlyGeofences.ts`)
+- `/data/geofence.json` 자동 로드
+- 에러 처리 및 빈 FeatureCollection fallback
+
+#### 10. Map 컴포넌트 (`frontend/components/client-only/ClientOnlyMap.tsx`)
+- MapLibre 베이스맵 (Carto Dark Matter)
+- DeckGL 오버레이 (정적, `controller={false}`)
+- LUMA_PATCH_KEY 패치 포함
+- 레이어:
+  - GeoJsonLayer: 지오펜스 마스크 및 아웃라인
+  - ScatterplotLayer: 이벤트 포인트 (enter/exit 색상 구분)
+  - ArcLayer: Legs 시각화
+  - TextLayer: 위치 라벨
+  - HeatmapLayer: 이벤트 밀도 히트맵
+  - SolidPolygonLayer: ETA wedge (3D)
+
+#### 11. Dashboard UI (`frontend/components/client-only/ClientOnlyDashboard.tsx`)
+- 초기 데이터 로딩 (Locations, Legs, Events)
+- KPI 패널 (Planned/InTransit/Arrived/Delayed/Hold/Unknown)
+- 레이어 토글 (Geofence mask, Heatmap, ETA wedge)
+- 시간 윈도우 조절 (1-168시간)
+- 히트맵 필터 (event type)
+
+#### 12. 새 라우트 (`frontend/pages/dashboard-client-only.tsx`)
+- 인증 게이트 (기존 인증 패턴 재사용)
+- SSR 비활성화 (`dynamic` import)
+
+### 변경 파일
+
+**신규 파일 (14개)**:
+- `frontend/types/clientOnly.ts`
+- `frontend/store/useClientOnlyStore.ts`
+- `frontend/hooks/useClientOnlyGeofences.ts`
+- `frontend/hooks/useBatchedClientOnlyWs.ts`
+- `frontend/lib/client-only/geofence.ts`
+- `frontend/lib/client-only/heatmap.ts`
+- `frontend/lib/client-only/eta.ts`
+- `frontend/lib/client-only/ws.ts`
+- `frontend/components/client-only/ClientOnlyMap.tsx`
+- `frontend/components/client-only/ClientOnlyDashboard.tsx`
+- `frontend/pages/dashboard-client-only.tsx`
+- `frontend/public/data/geofence.json`
+- `frontend/docs/client-only-geofence-guide.md`
+
+**수정 파일**:
+- `frontend/package.json`: 의존성 추가
+- `AGENTS.md`: Next.js 버전 업데이트 (14 → 16.1.1)
+
+### 의존성 추가
+
+```json
+{
+  "@deck.gl/aggregation-layers": "^9.0.0",
+  "@deck.gl/extensions": "^9.0.0",
+  "@deck.gl/layers": "^9.0.0",
+  "@turf/boolean-point-in-polygon": "^7.0.0",
+  "@turf/helpers": "^7.0.0",
+  "zustand": "^4.5.2",
+  "@types/geojson": "^7946.0.13"
+}
+```
+
+**참고**: `GeoJsonLayer`는 `@deck.gl/layers`에서 제공되므로 별도의 `@deck.gl/geo-layers` 패키지가 필요 없습니다.
+
+### 검증 결과
+
+#### 빌드 검증
+- ✅ TypeScript 컴파일 성공
+- ✅ Next.js 빌드 성공
+- ✅ 타입 오류 수정 완료:
+  - `GeoJsonLayer` import 경로 수정 (`@deck.gl/layers`)
+  - `GeoFenceIndex` import 경로 수정 (`lib/client-only/geofence`)
+  - `arcs` 타입 가드 수정 (null 필터링)
+
+#### 코드 품질
+- ✅ ESLint 오류 없음
+- ✅ TextLayer 실제 사용 중 (제거 불필요)
+- ✅ 타입 안전성 개선 (`any` 타입 최소화)
+
+#### 알려진 제한사항
+- ⚠️ 지오펜스 데이터는 placeholder (실제 운영 데이터로 교체 필요)
+- ⚠️ WebSocket 인증 미구현 (향후 토큰 쿼리 파라미터 추가 예정)
+- ⚠️ iOS Safari 히트맵 제한 (가중치 1-255 범위 유지)
+
+### 다음 단계
+
+1. **런타임 검증**: 개발 서버 실행 및 브라우저 테스트
+   - ⚠️ **중요**: `next-env.d.ts` 수정 후 프론트엔드 서버 재시작 필요
+   - 참고: `docs/Server_Restart_Guide.md` 참조
+   - 참고: `docs/Runtime_Verification_Results.md` 참조
+2. **지오펜스 데이터 교체**: 실제 운영 데이터로 교체
+3. **성능 최적화**: 대량 이벤트 처리 시 메모리 모니터링
+4. **기능 확장**: 타임라인 필터, 이벤트 상세 팝업
+
+---
+
+## 런타임 검증 진행 상황 (2026-01-10)
+
+**검증 일시**: 2026-01-10
+**상태**: 🔄 진행 중 (서버 재시작 후 브라우저 테스트 필요)
+
+### 완료된 검증 ✅
+
+1. **사전 준비 사항 확인** ✅
+   - 의존성 설치 확인 (Backend/Frontend 모두 정상)
+   - 데이터 파일 확인 (CSV, GeoJSON 모두 존재)
+
+2. **백엔드 서버 검증** ✅
+   - 서버 실행 성공 (포트 8000)
+   - API 엔드포인트 검증 완료:
+     - ✅ 로그인: `POST /api/auth/login` 성공
+     - ✅ Locations: 8개 반환
+     - ✅ Legs: 6개 반환
+     - ✅ Events: 28개 반환
+     - ✅ Demo 이벤트 생성: 성공
+
+3. **프론트엔드 서버 검증** ✅
+   - 서버 실행 성공 (포트 3000)
+   - JSX 런타임 오류 발견 및 수정 (`next-env.d.ts` 정리)
+
+### 발견된 이슈 및 해결
+
+#### 이슈: JSX 런타임 오류 ✅ **해결 완료**
+- **증상**: 브라우저 콘솔에 `jsxDEV is not a function` 오류
+- **근본 원인**: **글로벌 `NODE_ENV=production` 설정** (가장 큰 원인)
+- **부차적 원인**: `next-env.d.ts`에 잘못된 import (`import "./.next/dev/types/routes.d.ts"`)
+- **해결**:
+  - ✅ 글로벌 `NODE_ENV` 제거: `$env:NODE_ENV = $null`
+  - ✅ `package.json` dev 스크립트에 `cross-env NODE_ENV=development` 추가
+  - ✅ `next-env.d.ts`에서 잘못된 import 제거
+  - ✅ `tsconfig.json` `jsx: "react-jsx"` 설정 확인
+  - ✅ `.next` 캐시 정리
+- **검증 완료**: ✅ 브라우저 콘솔에서 JSX 오류 없음 확인 (루트 페이지 `/` 정상 작동)
+- **상세 내용**: `docs/JSX_Error_Resolution_Summary.md` 참조
+
+### 수동 브라우저 테스트 필요 항목 ⚠️
+
+서버 재시작 후 다음 항목들을 브라우저에서 확인 필요:
+
+- [ ] 로그인 화면 표시
+- [ ] 로그인 성공 (`ops_user / ops123`)
+- [ ] 초기 데이터 로딩 (Locations, Legs, Events)
+- [ ] 지도 렌더링 (MapLibre + DeckGL)
+- [ ] WebSocket 연결 성공
+- [ ] 이벤트 포인트 표시
+- [ ] KPI 패널 업데이트
+- [ ] 레이어 토글 동작
+- [ ] 시간 윈도우 조절
+- [ ] 히트맵 필터
+- [ ] 실시간 이벤트 업데이트
+- [ ] 지오펜스 판정 (enter/exit 색상)
+- [ ] 성능 테스트
+- [ ] 오류 처리 검증
+
+**참고**: 상세 검증 체크리스트는 `docs/Runtime_Verification_Results.md` 참조
+
+---
+
 ### 변경 이력
 
+- **2026-01-10**: Phase 4.1 Client-Only Dashboard 구현 완료
+- **2026-01-10**: TypeScript 타입 오류 수정 및 빌드 검증 완료
+- **2026-01-10**: 사용하지 않는 의존성 `@deck.gl/geo-layers` 제거 (번들 크기 감소)
+- **2026-01-10**: 지오펜스 데이터 교체 가이드 문서화
+- **2026-01-10**: 런타임 검증 진행 (백엔드 API 검증 완료, 프론트엔드 JSX 오류 수정)
+- **2026-01-10**: `next-env.d.ts` 파일 정리 (잘못된 import 제거)
+- **2026-01-10**: 런타임 검증 결과 문서화 (`docs/Runtime_Verification_Results.md`)
+- **2026-01-10**: 서버 재시작 가이드 문서화 (`docs/Server_Restart_Guide.md`)
 - **2026-01-10**: Map 초기화 및 WebGL 오류 수정
 - **2026-01-10**: Next.js 16 업데이트
 - **2026-01-10**: 디버그 파일 정리

@@ -1,6 +1,6 @@
 # Client-Only Dashboard 런타임 검증 결과
 
-**검증 일시**: 2026-01-10  
+**검증 일시**: 2026-01-10
 **검증 환경**: Windows, PowerShell
 
 ---
@@ -195,8 +195,21 @@
   - [x] Legs 엔드포인트 (6개)
   - [x] Events 엔드포인트 (28개)
   - [x] Demo 이벤트 생성
+- [x] **JSX 런타임 오류 해결 완료** ✅
+  - [x] 글로벌 `NODE_ENV=production` 제거
+  - [x] `package.json`에 `cross-env NODE_ENV=development` 추가
+  - [x] `next-env.d.ts`에서 잘못된 import 제거
+  - [x] `tsconfig.json` `jsx: "react-jsx"` 설정 확인
+  - [x] `.next` 캐시 정리
+  - [x] 브라우저 콘솔에서 JSX 오류 해결 확인 (루트 페이지 `/` 정상 작동)
+- [x] 검증 결과 문서화 완료
 
-### 수동 테스트 필요 항목 ⚠️
+### 수동 테스트 필요 항목 ⚠️ (서버 재시작 후)
+
+**⚠️ 중요**: 프론트엔드 서버 재시작 후 다음 항목들을 테스트해야 합니다.
+- 참고: `docs/Server_Restart_Guide.md` 참조
+
+**기능 테스트**:
 - [ ] 로그인 화면 표시
 - [ ] 로그인 성공
 - [ ] 초기 데이터 로딩 (Locations, Legs, Events)
@@ -209,6 +222,8 @@
 - [ ] 히트맵 필터
 - [ ] 실시간 이벤트 업데이트
 - [ ] 지오펜스 판정 (enter/exit 색상)
+
+**고급 테스트**:
 - [ ] 성능 테스트 통과
 - [ ] 오류 처리 검증
 
@@ -221,7 +236,36 @@
 - **해결책**: 수동으로 `mosb_logistics_dashboard_next_fastapi_mvp/frontend/.env.local` 파일 생성
 - **영향**: 낮음 (기본값으로 동작)
 
-### 이슈 2: 프론트엔드 서버 초기 컴파일 시간
+### 이슈 2: 프론트엔드 서버 JSX 런타임 오류 ✅ **해결 완료**
+- **증상**: 브라우저 콘솔에 `jsxDEV is not a function` 오류 발생
+- **원인**:
+  - ✅ **글로벌 NODE_ENV=production 설정** (가장 큰 원인)
+  - ✅ `next-env.d.ts`에 잘못된 import (`import "./.next/dev/types/routes.d.ts"`)
+  - ✅ `tsconfig.json` 설정: `jsx: "react-jsx"` (올바른 설정)
+- **해결**:
+  - ✅ 글로벌 `NODE_ENV` 제거: `$env:NODE_ENV = $null`
+  - ✅ `package.json` dev 스크립트에 `cross-env NODE_ENV=development` 추가
+  - ✅ `next-env.d.ts`에서 잘못된 import 제거
+  - ✅ `tsconfig.json` `jsx: "react-jsx"` 설정 (올바름)
+  - ✅ `.next` 캐시 정리
+- **상태**: ✅ **해결 완료** (JSX 런타임 오류 없음 확인)
+- **검증**: 브라우저 콘솔에서 `jsxDEV is not a function` 오류 사라짐
+- **결과**: 루트 페이지(`/`) 정상 작동, JSX 런타임 오류 없음
+
+### 이슈 3: `/dashboard-client-only` 라우트 404 오류 ⚠️
+- **증상**: `/dashboard-client-only` 접근 시 "404: This page could not be found" 오류
+- **원인**:
+  - 파일은 존재함: `pages/dashboard-client-only.tsx` ✅
+  - 서버가 아직 해당 라우트를 컴파일하지 않았을 수 있음
+  - Next.js 개발 서버의 첫 빌드 시간 문제 가능
+- **해결책**:
+  1. 서버 재시작 후 30-60초 대기 (라우트 컴파일 시간)
+  2. 페이지 파일이 올바른 위치에 있는지 확인: `pages/dashboard-client-only.tsx`
+  3. 파일 이름과 경로 대소문자 확인 (Next.js는 대소문자 구분)
+- **상태**: 파일 존재 확인, 컴파일 대기 중
+- **영향**: 중간 (특정 라우트만 접근 불가)
+
+### 이슈 4: 프론트엔드 서버 초기 컴파일 시간
 - **원인**: Next.js 개발 서버 첫 빌드 시 컴파일 시간 소요
 - **해결책**: 서버 시작 후 30-60초 대기 후 브라우저 접근
 - **영향**: 낮음 (일회성, 개발 환경에서만 발생)
@@ -230,20 +274,48 @@
 
 ## 다음 단계
 
-1. **수동 브라우저 테스트 수행**:
-   - `http://localhost:3000/dashboard-client-only` 접속
+### 즉시 필요한 작업
+
+1. **✅ JSX 런타임 오류 해결 완료** ✅
+   - **해결 완료**: 글로벌 `NODE_ENV=production` 제거, `cross-env NODE_ENV=development` 추가, `next-env.d.ts` 정리
+   - **검증 완료**: 브라우저 콘솔에서 JSX 오류 없음 확인 (루트 페이지 `/` 정상 작동)
+   - **상세 내용**: `docs/JSX_Error_Resolution_Summary.md` 참조
+
+2. **프론트엔드 서버 재시작** (수동 실행 필요):
+   - **현재 상태**: 서버 상태 불안정 (포트 3000 TIME_WAIT)
+   - **필수 작업**: 다음 명령어로 서버 재시작
+     ```powershell
+     # 글로벌 NODE_ENV 제거 (현재 세션)
+     $env:NODE_ENV = $null
+
+     # 프론트엔드 디렉토리로 이동
+     cd mosb_logistics_dashboard_next_fastapi_mvp\frontend
+
+     # .next 캐시 정리 (선택사항)
+     Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue
+
+     # 서버 시작
+     npm run dev
+     ```
+   - **대기 시간**: 서버 시작 후 30-60초 대기 (첫 빌드 시간)
+
+3. **브라우저 테스트 수행** (서버 재시작 후):
+   - `http://localhost:3000/` 접속 → JSX 오류 없음 확인 ✅ (이미 검증됨)
+   - `http://localhost:3000/dashboard-client-only` 접속 → 라우트 접근 확인
    - 위의 "브라우저 기반 기능 테스트" 체크리스트 확인
 
-2. **검증 결과 업데이트**:
+### 후속 작업
+
+3. **검증 결과 업데이트**:
    - 브라우저 테스트 완료 후 이 문서 업데이트
    - 발견된 버그 또는 개선 사항 기록
 
-3. **프로덕션 준비**:
+4. **프로덕션 준비**:
    - 환경 변수 설정 확인
    - 성능 최적화 확인
    - 보안 설정 확인
 
 ---
 
-**문서 버전**: 1.0  
+**문서 버전**: 1.0
 **최종 업데이트**: 2026-01-10
