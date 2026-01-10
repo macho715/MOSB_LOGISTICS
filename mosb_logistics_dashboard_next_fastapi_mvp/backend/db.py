@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import duckdb
 
-from models import Event, Leg, Location, Shipment
+from models import Event, Leg, Location, Shipment, LocationStatusOut
 
 
 class Database:
@@ -125,6 +125,22 @@ class Database:
                 lon DOUBLE NOT NULL,
                 remark VARCHAR
             )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS location_status (
+                location_id VARCHAR PRIMARY KEY,
+                ts VARCHAR NOT NULL,
+                occupancy_ratio DOUBLE NOT NULL,
+                status_code VARCHAR NOT NULL
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_location_status_ts
+            ON location_status (ts)
             """
         )
 
@@ -247,6 +263,54 @@ class Database:
                 event.lat,
                 event.lon,
                 event.remark,
+            ],
+        )
+
+    def get_location_status(
+        self,
+        location_id: Optional[str] = None,
+    ) -> List[LocationStatusOut]:
+        """위치 상태를 반환합니다. / Return location status rows."""
+        columns = ["location_id", "ts", "occupancy_ratio", "status_code"]
+        if location_id:
+            return self._fetch_models(
+                """
+                SELECT location_id, ts, occupancy_ratio, status_code
+                FROM location_status
+                WHERE location_id = ?
+                ORDER BY ts DESC
+                LIMIT 1
+                """,
+                columns,
+                LocationStatusOut,
+                [location_id],
+            )
+        return self._fetch_models(
+            """
+            SELECT location_id, ts, occupancy_ratio, status_code
+            FROM location_status
+            ORDER BY ts DESC
+            """,
+            columns,
+            LocationStatusOut,
+        )
+
+    def upsert_location_status(self, status: LocationStatusOut) -> None:
+        """위치 상태를 저장합니다. / Upsert a location status row."""
+        self.conn.execute(
+            """
+            INSERT INTO location_status (location_id, ts, occupancy_ratio, status_code)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(location_id) DO UPDATE SET
+                ts = excluded.ts,
+                occupancy_ratio = excluded.occupancy_ratio,
+                status_code = excluded.status_code
+            """,
+            [
+                status.location_id,
+                status.ts,
+                status.occupancy_ratio,
+                status.status_code,
             ],
         )
 

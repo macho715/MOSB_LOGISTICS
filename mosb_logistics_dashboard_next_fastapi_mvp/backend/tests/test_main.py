@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
@@ -85,3 +86,31 @@ def test_post_demo_event():
     assert data["event"]["shpt_no"] == "SHPT-AGI-0001"
     assert "event_id" in data["event"]
     assert "ts" in data["event"]
+
+
+def test_post_location_status():
+    token = get_token()
+    payload = {
+        "location_id": "MOSB_ESNAAD",
+        "ts": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "occupancy_ratio": 0.72,
+    }
+    response = client.post(
+        "/api/location-status",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["location_id"] == payload["location_id"]
+    assert data["status_code"] in {"OK", "BUSY", "FULL"}
+
+
+def test_get_location_status():
+    token = get_token()
+    response = client.get(
+        "/api/location-status",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)

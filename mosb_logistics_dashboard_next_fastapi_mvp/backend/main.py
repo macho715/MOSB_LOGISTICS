@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from cache import CacheManager
 from db import Database
-from models import Event, Leg, Location, Shipment
+from models import Event, Leg, Location, Shipment, LocationStatusIn, LocationStatusOut
 from auth import (
     authenticate_user,
     create_access_token,
@@ -51,6 +51,14 @@ def append_event(event: Dict[str, Any]) -> None:
 def iso_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
+def derive_location_status_code(occupancy_ratio: float) -> str:
+    """KR: 적재율 기반 상태 코드를 산출합니다. EN: Derive status code from occupancy."""
+    if occupancy_ratio < 0.6:
+        return "OK"
+    if occupancy_ratio < 0.85:
+        return "BUSY"
+    return "FULL"
+
 def parse_iso_ts(value: str) -> Optional[datetime]:
     if not value:
         return None
@@ -70,6 +78,20 @@ def parse_rows(rows: List[Dict[str, Any]], model: Type[BaseModel], label: str):
         except Exception as exc:
             logger.warning("Skipping %s row: %s", label, exc)
     return parsed
+
+def get_location_ids() -> set[str]:
+    """KR: 위치 ID 집합을 반환합니다. EN: Return a set of location IDs."""
+    cached = cache.get_cached_locations()
+    if cached is not None:
+        return {loc.location_id for loc in cached}
+    try:
+        locations = db.get_locations()
+    except Exception as exc:
+        logger.warning("DB locations fetch failed: %s", exc)
+        rows = read_csv(os.path.join(DATA_DIR, "locations.csv"))
+        locations = parse_rows(rows, Location, "location")
+    cache.set_cached_locations("all", locations)
+    return {loc.location_id for loc in locations}
 
 db = Database()
 cache = CacheManager()
@@ -206,6 +228,49 @@ def get_events(since: Optional[str] = None, current_user: User = Depends(get_cur
                 events = parse_rows(out, Event, "event")
     cache.set_cached_events(cache_key, events)
     return events
+
+@app.get("/api/location-status", response_model=list[LocationStatusOut])
+def get_location_status(current_user: User = Depends(get_current_user)):
+    """KR: 위치 상태 목록을 반환합니다. EN: Return location status list."""
+    cached = cache.get_cached_location_status()
+    if cached is not None:
+        return cached
+    try:
+        status_rows = db.get_location_status()
+    except Exception as exc:
+        logger.warning("DB location status fetch failed: %s", exc)
+        status_rows = []
+    cache.set_cached_location_status("all", status_rows)
+    return status_rows
+
+@app.post("/api/location-status", response_model=LocationStatusOut)
+async def post_location_status(
+    payload: LocationStatusIn,
+    current_user: User = Depends(require_role(["OPS", "ADMIN"])),
+):
+    """KR: 위치 상태를 업데이트합니다. EN: Update location status."""
+    location_ids = get_location_ids()
+    if payload.location_id not in location_ids:
+        raise HTTPException(status_code=404, detail="Unknown location_id")
+    ts_dt = parse_iso_ts(payload.ts)
+    if not ts_dt:
+        raise HTTPException(status_code=400, detail="Invalid ts format")
+    now_dt = datetime.now(timezone.utc)
+    if ts_dt > now_dt:
+        raise HTTPException(status_code=400, detail="Future ts is not allowed")
+    existing = db.get_location_status(payload.location_id)
+    if existing:
+        existing_ts = parse_iso_ts(existing[0].ts)
+        if existing_ts and ts_dt <= existing_ts:
+            raise HTTPException(status_code=409, detail="Out-of-order ts update")
+    status = LocationStatusOut(
+        **payload.model_dump(),
+        status_code=derive_location_status_code(payload.occupancy_ratio),
+    )
+    db.upsert_location_status(status)
+    cache.invalidate_location_status()
+    await hub.broadcast({"type": "location_status", "payload": status.model_dump()})
+    return status
 
 # Simple websocket broadcaster
 class Hub:
