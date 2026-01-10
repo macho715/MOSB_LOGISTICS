@@ -1,13 +1,14 @@
 [project]
-name = "cursor-full-option-pack"
+name = "mosb-logistics-dashboard"
 version = "0.1.0"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
+testpaths = ["mosb_logistics_dashboard_next_fastapi_mvp/backend/tests"]
 addopts = "-q --strict-markers --maxfail=1"
 
 [tool.coverage.run]
-source = ["src"]
+source = ["mosb_logistics_dashboard_next_fastapi_mvp/backend"]
 branch = true
 
 [tool.coverage.report]

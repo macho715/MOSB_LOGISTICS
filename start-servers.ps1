@@ -93,11 +93,13 @@ function Clean-FrontendCache {
         if (-not (Test-Path $nextDir)) {
             Write-ColorOutput Green "✅ .next 캐시 정리 완료"
             return $true
-        } else {
+        }
+        else {
             Write-ColorOutput Red "❌ .next 캐시 정리 실패"
             return $false
         }
-    } else {
+    }
+    else {
         Write-ColorOutput Gray "   .next 캐시 없음 (건너뜀)"
         return $true
     }
@@ -134,7 +136,8 @@ function Stop-ServerOnPort {
                     Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
                     Start-Sleep -Milliseconds 500
                 }
-            } catch {
+            }
+            catch {
                 Write-ColorOutput Yellow "   경고: 프로세스 $processId 종료 실패 (이미 종료되었을 수 있음)"
             }
         }
@@ -152,12 +155,14 @@ function Stop-ServerOnPort {
 
         if ($remaining.Count -eq 0) {
             Write-ColorOutput Green "✅ $ServerName (포트 $Port) 종료 완료"
-        } else {
+        }
+        else {
             Write-ColorOutput Red "❌ $ServerName (포트 $Port) 종료 실패. 남은 프로세스: $($remaining -join ', ')"
             Write-ColorOutput Yellow "   💡 수동 종료: Get-Process -Id $($remaining -join ',') | Stop-Process -Force"
             return $false
         }
-    } else {
+    }
+    else {
         Write-ColorOutput Green "✅ $ServerName (포트 $Port) 실행 중인 프로세스 없음"
     }
     return $true
@@ -193,11 +198,11 @@ function Start-Backend {
     try {
         # Job 스코프에서 사용할 환경 변수 준비
         $envVars = @{
-            DATA_DIR = if ($env:DATA_DIR) { $env:DATA_DIR } else { "./data" }
+            DATA_DIR          = if ($env:DATA_DIR) { $env:DATA_DIR } else { "./data" }
             LOGISTICS_DB_PATH = if ($env:LOGISTICS_DB_PATH) { $env:LOGISTICS_DB_PATH } else { "./data/logistics.db" }
-            CORS_ORIGINS = if ($env:CORS_ORIGINS) { $env:CORS_ORIGINS } else { "http://localhost:3000" }
-            LOG_LEVEL = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { "INFO" }
-            WS_PING_INTERVAL = if ($env:WS_PING_INTERVAL) { $env:WS_PING_INTERVAL } else { "10" }
+            CORS_ORIGINS      = if ($env:CORS_ORIGINS) { $env:CORS_ORIGINS } else { "http://localhost:3000" }
+            LOG_LEVEL         = if ($env:LOG_LEVEL) { $env:LOG_LEVEL } else { "INFO" }
+            WS_PING_INTERVAL  = if ($env:WS_PING_INTERVAL) { $env:WS_PING_INTERVAL } else { "10" }
         }
 
         # .env 파일에서 추가 환경 변수 로드 (Job 스코프 내에서)
@@ -211,7 +216,7 @@ function Start-Backend {
 
             # 환경 변수 설정
             foreach ($key in $EnvVars.Keys) {
-                $env:$key = $EnvVars[$key]
+                Set-Item -Path "env:$key" -Value $EnvVars[$key] -ErrorAction SilentlyContinue
             }
 
             # .env 파일 파싱 및 적용
@@ -258,7 +263,8 @@ function Start-Backend {
                     -TimeoutSec 2 -ErrorAction Stop | Out-Null
                 $ready = $true
                 Write-ColorOutput Green "✅ Backend 서버 준비 완료!"
-            } catch {
+            }
+            catch {
                 $attempt++
                 if ($attempt -lt $maxAttempts) {
                     Start-Sleep -Seconds 1
@@ -271,10 +277,12 @@ function Start-Backend {
         }
 
         return $true
-    } catch {
+    }
+    catch {
         Write-ColorOutput Red "❌ Backend 서버 시작 실패: $($_.Exception.Message)"
         return $false
-    } finally {
+    }
+    finally {
         Pop-Location
     }
 }
@@ -324,16 +332,19 @@ function Start-Frontend {
     if (-not $hasCrossEnv) {
         Write-ColorOutput Yellow "⚠️  cross-env가 package.json에 없음. 설치 중..."
         try {
-            $installOutput = npm install cross-env@^7.0.3 --save-dev 2>&1
+            npm install cross-env@^7.0.3 --save-dev 2>&1 | Out-Null
             if ($LASTEXITCODE -eq 0) {
                 Write-ColorOutput Green "✅ cross-env 설치 완료"
-            } else {
+            }
+            else {
                 Write-ColorOutput Yellow "⚠️  cross-env 설치 중 경고 발생 (계속 진행)"
             }
-        } catch {
+        }
+        catch {
             Write-ColorOutput Yellow "⚠️  cross-env 설치 실패: $($_.Exception.Message) (계속 진행)"
         }
-    } else {
+    }
+    else {
         # package.json에 있지만 node_modules에 없을 수 있음
         $nodeModulesPath = Join-Path $FrontendDir "node_modules\cross-env"
         if (-not (Test-Path $nodeModulesPath)) {
@@ -341,7 +352,8 @@ function Start-Frontend {
             try {
                 npm install 2>&1 | Out-Null
                 Write-ColorOutput Green "✅ 의존성 설치 완료"
-            } catch {
+            }
+            catch {
                 Write-ColorOutput Yellow "⚠️  의존성 설치 중 경고 발생 (계속 진행)"
             }
         }
@@ -377,13 +389,15 @@ npm run dev
                 if ($conn) {
                     $ready = $true
                     Write-ColorOutput Green "✅ Frontend 서버 포트 3000 리스닝 중"
-                } else {
+                }
+                else {
                     $attempt++
                     if ($attempt -lt $maxAttempts) {
                         Start-Sleep -Seconds 5
                     }
                 }
-            } catch {
+            }
+            catch {
                 $attempt++
                 if ($attempt -lt $maxAttempts) {
                     Start-Sleep -Seconds 5
@@ -396,10 +410,12 @@ npm run dev
         }
 
         return $true
-    } catch {
+    }
+    catch {
         Write-ColorOutput Red "❌ Frontend 서버 시작 실패: $($_.Exception.Message)"
         return $false
-    } finally {
+    }
+    finally {
         Pop-Location
     }
 }
@@ -411,25 +427,49 @@ Write-ColorOutput Cyan "══════════════════�
 if (-not $SkipCheck) {
     Write-ColorOutput Yellow "1️⃣  실행 중인 서버 확인 중...`n"
 
+    # 시작할 서비스 결정
+    $shouldStartBackend = -not $FrontendOnly
+    $shouldStartFrontend = -not $BackendOnly
+
+    # 양쪽 서비스 포트 확인 (종료하지 않고 확인만)
+    # 반대 서비스가 실행 중인지 감지하기 위함
+    $backendRunning = (Check-Port 8000).Count -gt 0
+    $frontendRunning = (Check-Port 3000).Count -gt 0
+
+    # 시작할 서비스가 아닌 반대 서비스가 실행 중인 경우 정보 메시지
+    if ($FrontendOnly -and $backendRunning) {
+        Write-ColorOutput Cyan "ℹ️  Backend (포트 8000)가 이미 실행 중입니다. Frontend만 시작합니다."
+        Write-ColorOutput Gray "   💡 Backend는 그대로 유지됩니다."
+    }
+    if ($BackendOnly -and $frontendRunning) {
+        Write-ColorOutput Cyan "ℹ️  Frontend (포트 3000)가 이미 실행 중입니다. Backend만 시작합니다."
+        Write-ColorOutput Gray "   💡 Frontend는 그대로 유지됩니다."
+    }
+
+    # 시작할 서비스의 포트만 종료
     $backendOk = $true
     $frontendOk = $true
 
-    if (-not $FrontendOnly) {
+    if ($shouldStartBackend) {
         $backendOk = Stop-ServerOnPort 8000 "Backend"
+        if (-not $backendOk) {
+            Write-ColorOutput Red "`n❌ Backend 서버 종료 실패. 수동으로 종료 후 다시 시도하세요."
+            exit 1
+        }
     }
 
-    if (-not $BackendOnly) {
+    if ($shouldStartFrontend) {
         $frontendOk = Stop-ServerOnPort 3000 "Frontend"
-    }
-
-    if (-not ($backendOk -and $frontendOk)) {
-        Write-ColorOutput Red "`n❌ 일부 서버 종료 실패. 수동으로 종료 후 다시 시도하세요."
-        exit 1
+        if (-not $frontendOk) {
+            Write-ColorOutput Red "`n❌ Frontend 서버 종료 실패. 수동으로 종료 후 다시 시도하세요."
+            exit 1
+        }
     }
 
     Write-ColorOutput Green "`n✅ 모든 서버 확인 완료`n"
     Start-Sleep -Seconds 2
-} else {
+}
+else {
     Write-ColorOutput Yellow "⏭️  서버 확인 단계 건너뜀 (--SkipCheck 옵션)"
 }
 
@@ -458,7 +498,8 @@ if ($backendStarted) {
     Write-ColorOutput Green "✅ Backend: http://localhost:8000"
     if ($script:BackendJobId) {
         Write-ColorOutput Gray "   Job ID: $($script:BackendJobId) (확인: Get-Job -Id $($script:BackendJobId))"
-    } else {
+    }
+    else {
         Write-ColorOutput Gray "   Job 확인: Get-Job"
     }
 }
@@ -471,7 +512,8 @@ Write-ColorOutput Yellow "`n💡 서버 종료:"
 Write-ColorOutput Gray "   - Frontend: 새 PowerShell 창에서 Ctrl+C"
 if ($script:BackendJobId) {
     Write-ColorOutput Gray "   - Backend: Stop-Job -Id $($script:BackendJobId); Remove-Job -Id $($script:BackendJobId) -Force"
-} else {
+}
+else {
     Write-ColorOutput Gray "   - Backend: `$job = Get-Job | Where-Object { `$_.Command -like '*uvicorn*' }; Stop-Job `$job; Remove-Job `$job -Force"
 }
 Write-ColorOutput Yellow "`n💡 유용한 명령어:"

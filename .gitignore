@@ -69,4 +69,10 @@ logs/
 # Debug/untitled files
 Untitled-*.ini
 Untitled-*.txt
+Untitled-*.ts
+Untitled-*.md
 *.ini.bak
+
+# Temporary/work files
+a.md
+Minimal, drop-in code*.ts

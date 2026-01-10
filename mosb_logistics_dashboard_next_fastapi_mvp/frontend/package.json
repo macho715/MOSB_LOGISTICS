@@ -2,7 +2,9 @@
     "name": "mosb-logistics-map-ui",
     "private": true,
     "scripts": {
+        "predev": "node scripts/fix-next-env-dts.js",
         "dev": "cross-env NODE_ENV=development next dev -p 3000",
+        "prebuild": "node scripts/fix-next-env-dts.js",
         "build": "next build",
         "start": "next start -p 3000",
         "lint": "next lint",
