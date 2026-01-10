@@ -1,4 +1,4 @@
-import type { Location, Shipment, Leg, Event } from "../types/logistics";
+import type { Location, Shipment, Leg, Event, LocationStatus } from "../types/logistics";
 import { AuthService } from "./auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
@@ -19,6 +19,23 @@ export class LogisticsAPI {
         throw new Error("Authentication required");
       }
       throw new Error(`Failed to fetch locations: ${res.statusText}`);
+    }
+    return res.json();
+  }
+
+  static async getLocationStatuses(): Promise<LocationStatus[]> {
+    const res = await fetch(`${API_BASE}/api/location-status`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) {
+      if (res.status === 401) {
+        AuthService.logout();
+        throw new Error("Authentication required");
+      }
+      if (res.status === 404) {
+        return [];
+      }
+      throw new Error(`Failed to fetch location status: ${res.statusText}`);
     }
     return res.json();
   }

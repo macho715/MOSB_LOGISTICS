@@ -248,12 +248,10 @@ WS_PING_INTERVAL=10
 
 ### 6.2 Frontend
 
-- `mosb_logistics_dashboard_next_fastapi_mvp/frontend/.env.local.example`
+- `mosb_logistics_dashboard_next_fastapi_mvp/frontend/.env.example`
 
 ```bash
 NEXT_PUBLIC_API_BASE=http://localhost:8000
-NEXT_PUBLIC_WS_RECONNECT_DELAY=3000
-NEXT_PUBLIC_WS_MAX_RECONNECT_ATTEMPTS=10
 ```
 
 Rules:

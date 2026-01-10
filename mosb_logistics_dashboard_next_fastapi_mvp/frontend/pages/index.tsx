@@ -8,7 +8,7 @@ import { Login } from "../components/Login";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { LogisticsAPI } from "../lib/api";
 import { AuthService, User } from "../lib/auth";
-import type { Event, Location } from "../types/logistics";
+import type { Event, Location, LocationStatus } from "../types/logistics";
 
 function toNum(value: unknown): number {
     const n = Number(value);
@@ -35,6 +35,20 @@ function colorForStatus(s: Event["status"]): [number, number, number, number] {
         HOLD: [220, 20, 60, 220],
     };
     return m[s] || [180, 180, 180, 180];
+}
+
+function colorForLocationStatus(code: string): [number, number, number, number] {
+    const normalized = code.toUpperCase();
+    if (["OK", "NORMAL", "GREEN"].includes(normalized)) return [0, 200, 83, 220];
+    if (["WARN", "WARNING", "YELLOW"].includes(normalized)) return [255, 193, 7, 230];
+    if (["CRITICAL", "ALERT", "RED"].includes(normalized)) return [244, 67, 54, 235];
+    if (normalized === "OFFLINE") return [120, 120, 120, 210];
+    return [160, 160, 160, 210];
+}
+
+function radiusForOccupancy(value: number): number {
+    const clamped = Math.min(Math.max(value, 0), 1);
+    return 140 + clamped * 160;
 }
 
 const baseKpiCounts: Record<Event["status"], number> = {
@@ -84,6 +98,9 @@ export default function Home() {
     const [authError, setAuthError] = useState<string | null>(null);
     const [locations, setLocations] = useState<Location[]>([]);
     const [events, setEvents] = useState<Event[]>([]);
+    const [locationStatuses, setLocationStatuses] = useState<Map<string, LocationStatus>>(
+        () => new Map(),
+    );
     const [selected, setSelected] = useState<string>("");
     const [isMapReady, setIsMapReady] = useState(false);
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -120,13 +137,17 @@ export default function Home() {
         };
         const load = async () => {
             try {
-                const [locs, evs] = await Promise.all([
+                const [locs, evs, statuses] = await Promise.all([
                     LogisticsAPI.getLocations(),
                     LogisticsAPI.getEvents(),
+                    LogisticsAPI.getLocationStatuses().catch(() => []),
                 ]);
                 if (!active) return;
                 setLocations(locs || []);
                 setEvents(evs || []);
+                if (statuses.length > 0) {
+                    setLocationStatuses(new Map(statuses.map(s => [s.location_id, s])));
+                }
                 if ((evs || []).length > 0) setSelected((evs[0]?.shpt_no) || "");
             } catch (err) {
                 if (!active) return;
@@ -149,7 +170,16 @@ export default function Home() {
         setEvents(prev => [event, ...prev].slice(0, 500));
     }, [user]);
 
-    useWebSocket(handleWsEvent);
+    const handleWsLocationStatus = useCallback((status: LocationStatus) => {
+        if (!user) return;
+        setLocationStatuses(prev => {
+            const next = new Map(prev);
+            next.set(status.location_id, status);
+            return next;
+        });
+    }, [user]);
+
+    useWebSocket(handleWsEvent, handleWsLocationStatus);
 
     const latestByShipment = useMemo(() => {
         const map = new Map<string, Event>();
@@ -159,6 +189,24 @@ export default function Home() {
         }
         return map;
     }, [events]);
+
+    const locationsById = useMemo(() => {
+        const map = new Map<string, Location>();
+        for (const location of locations) {
+            map.set(location.location_id, location);
+        }
+        return map;
+    }, [locations]);
+
+    const locationStatusPoints = useMemo(() => {
+        const out: Array<Location & { status: LocationStatus }> = [];
+        for (const status of locationStatuses.values()) {
+            const location = locationsById.get(status.location_id);
+            if (!location) continue;
+            out.push({ ...location, status });
+        }
+        return out;
+    }, [locationStatuses, locationsById]);
 
     const kpis = useMemo(() => {
         const counts = { ...baseKpiCounts };
@@ -199,6 +247,14 @@ export default function Home() {
                     // noop for now
                 }
             }
+        }),
+        new ScatterplotLayer<Location & { status: LocationStatus }>({
+            id: "location-status",
+            data: locationStatusPoints,
+            pickable: true,
+            getPosition: d => [toNum(d.lon), toNum(d.lat)],
+            getFillColor: d => colorForLocationStatus(d.status.status_code),
+            getRadius: d => radiusForOccupancy(d.status.occupancy_ratio),
         }),
         new ArcLayer<any>({
             id: "arcs",
@@ -296,6 +352,7 @@ export default function Home() {
         setUser(null);
         setLocations([]);
         setEvents([]);
+        setLocationStatuses(new Map());
         setSelected("");
         setAuthError(null);
     };

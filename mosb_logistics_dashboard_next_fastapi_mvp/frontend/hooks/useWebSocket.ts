@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Event } from "../types/logistics";
+import type { Event, LocationStatus } from "../types/logistics";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 const WS_URL = API_BASE.replace(/^http/, "ws");
@@ -37,12 +37,26 @@ function normalizeEvent(payload: any): Event | null {
   };
 }
 
+function normalizeLocationStatus(payload: any): LocationStatus | null {
+  if (!payload || typeof payload !== "object") return null;
+  if (!payload.location_id || !payload.ts || typeof payload.status_code !== "string") return null;
+  return {
+    location_id: String(payload.location_id),
+    ts: String(payload.ts),
+    occupancy_ratio: toNumber(payload.occupancy_ratio),
+    status_code: payload.status_code,
+  };
+}
+
 function readNumberSetting(value: string | undefined, fallback: number): number {
   const n = Number.parseInt(value || "", 10);
   return Number.isFinite(n) ? n : fallback;
 }
 
-export function useWebSocket(onEvent: (event: Event) => void) {
+export function useWebSocket(
+  onEvent: (event: Event) => void,
+  onLocationStatus?: (status: LocationStatus) => void,
+) {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -50,10 +64,15 @@ export function useWebSocket(onEvent: (event: Event) => void) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedByUser = useRef(false);
   const onEventRef = useRef(onEvent);
+  const onLocationStatusRef = useRef(onLocationStatus);
 
   useEffect(() => {
     onEventRef.current = onEvent;
   }, [onEvent]);
+
+  useEffect(() => {
+    onLocationStatusRef.current = onLocationStatus;
+  }, [onLocationStatus]);
 
   useEffect(() => {
     const reconnectDelay = readNumberSetting(
@@ -100,9 +119,16 @@ export function useWebSocket(onEvent: (event: Event) => void) {
         ws.onmessage = (msg) => {
           try {
             const data = JSON.parse(msg.data);
-            if (data?.type !== "event" || !data.payload) return;
-            const event = normalizeEvent(data.payload);
-            if (event) onEventRef.current(event);
+            if (!data?.payload) return;
+            if (data.type === "event") {
+              const event = normalizeEvent(data.payload);
+              if (event) onEventRef.current(event);
+              return;
+            }
+            if (data.type === "location_status") {
+              const status = normalizeLocationStatus(data.payload);
+              if (status) onLocationStatusRef.current?.(status);
+            }
           } catch {
             // Ignore parse errors to avoid crashing the UI.
           }

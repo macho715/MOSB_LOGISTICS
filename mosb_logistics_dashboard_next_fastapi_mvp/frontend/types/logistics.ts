@@ -39,3 +39,10 @@ export interface Event {
   lon: number;
   remark: string;
 }
+
+export interface LocationStatus {
+  location_id: string;
+  ts: string;
+  occupancy_ratio: number;
+  status_code: string;
+}
