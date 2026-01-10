@@ -1,0 +1,149 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "MOSB_ESNAAD",
+        "kind": "MOSB",
+        "name": "MOSB - Samsung HVDC Lightning Project Esnaad"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [54.44857, 24.318853],
+          [54.46857, 24.318853],
+          [54.46857, 24.338853],
+          [54.44857, 24.338853],
+          [54.44857, 24.318853]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "DSV_M19",
+        "kind": "WH",
+        "name": "DSV Warehouse (Musaffah M19)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [54.4564805, 24.3568127],
+          [54.4964805, 24.3568127],
+          [54.4964805, 24.3968127],
+          [54.4564805, 24.3968127],
+          [54.4564805, 24.3568127]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "MIRFA_ONSHORE",
+        "kind": "SITE",
+        "name": "MIR (Mirfa - reference)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [53.427, 24.101],
+          [53.467, 24.101],
+          [53.467, 24.141],
+          [53.427, 24.141],
+          [53.427, 24.101]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SHU_ONSHORE",
+        "kind": "SITE",
+        "name": "SHU (Shuweihat - reference)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [52.549199, 24.136936],
+          [52.589199, 24.136936],
+          [52.589199, 24.176936],
+          [52.549199, 24.176936],
+          [52.549199, 24.136936]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "AGI_OFFSHORE",
+        "kind": "SITE",
+        "name": "AGI (offshore - reference)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [53.6263, 24.8229],
+          [53.6663, 24.8229],
+          [53.6663, 24.8629],
+          [53.6263, 24.8629],
+          [53.6263, 24.8229]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "DAS_OFFSHORE",
+        "kind": "SITE",
+        "name": "DAS (Das Island - reference)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [52.843894, 25.131385],
+          [52.883894, 25.131385],
+          [52.883894, 25.171385],
+          [52.843894, 25.171385],
+          [52.843894, 25.131385]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "PORT_MZ",
+        "kind": "PORT",
+        "name": "Port (Mina Zayed - reference)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [54.367718, 24.502483],
+          [54.407718, 24.502483],
+          [54.407718, 24.542483],
+          [54.367718, 24.542483],
+          [54.367718, 24.502483]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "BERTH_MZ",
+        "kind": "BERTH",
+        "name": "Berth (Mina Zayed - reference)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [54.367718, 24.502483],
+          [54.387718, 24.502483],
+          [54.387718, 24.522483],
+          [54.367718, 24.522483],
+          [54.367718, 24.502483]
+        ]]
+      }
+    }
+  ]
+}

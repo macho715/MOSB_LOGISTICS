@@ -123,11 +123,16 @@ export const useClientOnlyStore = create<ClientOnlyState>()(
                 const prevZone = nextLastZoneByKey[key] ?? null;
                 const newZone = zone?.zone_id ?? null;
 
+                // Event type classification logic:
+                // - "enter": was outside (null) → now inside (non-null)
+                // - "exit": was inside (non-null) → now outside (null)
+                // - "move": zone-to-zone transition OR same zone movement
+                // - "unknown": was outside (null) → still outside (null) - no geofence history
                 const event_type =
                     prevZone === null && newZone !== null ? "enter" :
                         prevZone !== null && newZone === null ? "exit" :
-                            prevZone !== null && newZone !== null && prevZone !== newZone ? "move" :
-                                "move";
+                            prevZone !== null && newZone !== null ? "move" : // zone-to-zone OR same zone
+                                "unknown"; // prevZone === null && newZone === null
 
                 nextLastZoneByKey[key] = newZone;
 

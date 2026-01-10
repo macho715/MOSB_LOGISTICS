@@ -8,7 +8,7 @@ If this doc conflicts with repo reality (package.json/pyproject/docker-compose),
 ## 0) Executive Summary
 
 - 목표: Streamlit보다 기능 많고 세련된 **현장 물류 Ops Dashboard** 구축(멀티페이지/권한/RBAC/실시간/지도 커스텀 레이어).
-- 권장 스택: **Next.js 14 + React 18 + Deck.gl 9 + MapLibre 4 + FastAPI + WebSocket**.
+- 권장 스택: **Next.js 16.1.1 + React 18 + Deck.gl 9 + MapLibre 4 + FastAPI + WebSocket**.
 - 확장성: Port/Berth, Geofence, Heatmap, ETA cone, 이벤트 스트림, 감사로그까지 자연 확장.
 
 EN: For a polished, feature-rich ops dashboard, standardize on **Next.js + Deck.gl + FastAPI + WebSocket**.
@@ -19,7 +19,7 @@ EN: For a polished, feature-rich ops dashboard, standardize on **Next.js + Deck.
 
 Based on current structure review:
 
-- Frontend: **Next.js 14, React 18, Deck.gl 9, MapLibre 4**
+- Frontend: **Next.js 16.1.1, React 18, Deck.gl 9, MapLibre 4**
 - Backend: **FastAPI + WebSocket**
 - Data: **CSV seeds + DuckDB**
 - UI: **Dark theme**

@@ -71,14 +71,24 @@ export default function ClientOnlyMap() {
 
     const [isMapReady, setIsMapReady] = useState(false);
     const [viewState, setViewState] = useState(DEFAULT_VIEW);
+    const [currentTimeMs, setCurrentTimeMs] = useState(nowMs());
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
 
     const maskExt = useMemo(() => new MaskExtension(), []);
 
+    // Update current time periodically for ETA calculations (every 10 seconds)
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            setCurrentTimeMs(nowMs());
+        }, 10000); // 10 seconds
+
+        return () => clearInterval(intervalId);
+    }, []);
+
     const sinceMs = useMemo(
-        () => nowMs() - ui.hoursWindow * 60 * 60 * 1000,
-        [ui.hoursWindow],
+        () => currentTimeMs - ui.hoursWindow * 60 * 60 * 1000,
+        [currentTimeMs, ui.hoursWindow],
     );
 
     const heatPoints = useMemo(
@@ -87,8 +97,8 @@ export default function ClientOnlyMap() {
     );
 
     const etaWedges = useMemo(
-        () => computeEtaWedges(shipments, events, nowMs()),
-        [shipments, events],
+        () => computeEtaWedges(shipments, events, currentTimeMs),
+        [shipments, events, currentTimeMs],
     );
 
     const arcs = useMemo<ArcDatum[]>(() => {
@@ -357,12 +367,24 @@ export default function ClientOnlyMap() {
         maskExt,
     ]);
 
+    // No-op handler for DeckGL controlled mode (controller={false} means MapLibre handles interactions)
+    // This prevents potential warnings or edge cases when using viewState as a controlled prop
+    const handleViewStateChange = () => {
+        // View state changes are handled by MapLibre's 'move' event, not by DeckGL interactions
+        // Since controller={false}, DeckGL won't generate viewState changes from user gestures
+    };
+
     return (
         <div style={{ position: "relative", width: "100%", height: "calc(100vh - 120px)" }}>
             <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
             {isMapReady && (
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                    <DeckGL viewState={viewState} controller={false} layers={layers} />
+                    <DeckGL
+                        viewState={viewState}
+                        onViewStateChange={handleViewStateChange}
+                        controller={false}
+                        layers={layers}
+                    />
                 </div>
             )}
             <div
