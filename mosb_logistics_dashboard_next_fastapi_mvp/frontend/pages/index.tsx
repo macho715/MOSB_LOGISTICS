@@ -69,7 +69,11 @@ if (typeof window !== "undefined" && !(window as any)[LUMA_PATCH_KEY]) {
                 return [max, max];
             }
             // Fallback: call the original method to preserve its behavior
-            return originalGetMax.call(this);
+            try {
+                return originalGetMax.call(this);
+            } catch {
+                return [4096, 4096];
+            }
         };
     }
 }

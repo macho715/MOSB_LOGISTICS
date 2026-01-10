@@ -1,28 +1,35 @@
 {
-  "name": "mosb-logistics-map-ui",
-  "private": true,
-  "scripts": {
-    "dev": "next dev -p 3000",
-    "build": "next build",
-    "start": "next start -p 3000",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@deck.gl/core": "^9.0.0",
-    "@deck.gl/layers": "^9.0.0",
-    "@deck.gl/react": "^9.0.0",
-    "maplibre-gl": "^4.0.0",
-    "next": "^16.1.1",
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
-  },
-  "devDependencies": {
-    "@types/node": "20.19.27",
-    "@types/react": "18.3.27",
-    "@types/react-dom": "^18.2.0",
-    "eslint": "^9.39.2",
-    "eslint-config-next": "^16.1.1",
-    "typescript": "5.9.3"
-  }
+    "name": "mosb-logistics-map-ui",
+    "private": true,
+    "scripts": {
+        "dev": "cross-env NODE_ENV=development next dev -p 3000",
+        "build": "next build",
+        "start": "next start -p 3000",
+        "lint": "next lint",
+        "type-check": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@deck.gl/aggregation-layers": "^9.0.0",
+        "@deck.gl/core": "^9.0.0",
+        "@deck.gl/extensions": "^9.0.0",
+        "@deck.gl/layers": "^9.0.0",
+        "@deck.gl/react": "^9.0.0",
+        "@turf/boolean-point-in-polygon": "^7.0.0",
+        "@turf/helpers": "^7.0.0",
+        "maplibre-gl": "^4.0.0",
+        "next": "^16.1.1",
+        "react": "18.2.0",
+        "react-dom": "18.2.0",
+        "zustand": "^4.5.2"
+    },
+    "devDependencies": {
+        "@types/geojson": "^7946.0.13",
+        "@types/node": "20.19.27",
+        "@types/react": "18.3.27",
+        "@types/react-dom": "^18.2.0",
+        "cross-env": "^7.0.3",
+        "eslint": "^9.39.2",
+        "eslint-config-next": "^16.1.1",
+        "typescript": "5.9.3"
+    }
 }

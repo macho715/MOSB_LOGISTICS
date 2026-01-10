@@ -81,6 +81,13 @@ All notable changes to this project will be documented in this file.
 - Removed unused dependency `@deck.gl/geo-layers` (2026-01-10)
   - `GeoJsonLayer` is imported from `@deck.gl/layers`, making `@deck.gl/geo-layers` unnecessary
   - Reduces bundle size by removing unused dependency
+- **Fixed DeckGL and MapLibre view state synchronization** (2026-01-10)
+  - Fixed `ClientOnlyMap.tsx` where DeckGL layers remained fixed at initial position when MapLibre base map was panned or zoomed
+  - Added `viewState` state to sync DeckGL with MapLibre's view changes
+  - Implemented MapLibre `move` event listener to update DeckGL `viewState` on all view changes (pan, zoom, pitch, bearing)
+  - Used `requestAnimationFrame` to throttle updates and improve performance
+  - Changed DeckGL from uncontrolled (`initialViewState`) to controlled (`viewState` prop) component
+  - All DeckGL layers (events, heatmap, arcs, geofences) now move correctly with the MapLibre base map
 - Dashboard crash when user cache is empty on initial render
   - Changed `user.role` to `user?.role` (optional chaining) in `frontend/pages/index.tsx`
   - Prevents `TypeError: Cannot read property 'role' of null`

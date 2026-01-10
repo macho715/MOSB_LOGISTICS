@@ -1,333 +1,379 @@
-import React, { useMemo, useEffect, useRef, useState } from "react";
-import DeckGL from "@deck.gl/react";
-import { ArcLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer, GeoJsonLayer } from "@deck.gl/layers";
 import { HeatmapLayer } from "@deck.gl/aggregation-layers";
-import { MaskExtension } from "@deck.gl/extensions";
 import type { Layer } from "@deck.gl/core";
+import { MaskExtension } from "@deck.gl/extensions";
+import { ArcLayer, GeoJsonLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer } from "@deck.gl/layers";
+import DeckGL from "@deck.gl/react";
 import { CanvasContext } from "@luma.gl/core";
 import maplibregl from "maplibre-gl";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useClientOnlyStore } from "../../store/useClientOnlyStore";
-import { buildHeatPoints } from "../../lib/client-only/heatmap";
 import { computeEtaWedges } from "../../lib/client-only/eta";
+import { buildHeatPoints } from "../../lib/client-only/heatmap";
+import { useClientOnlyStore } from "../../store/useClientOnlyStore";
 import type { AnnotatedEvent } from "../../types/clientOnly";
 
 const DEFAULT_VIEW = {
-  longitude: 54.45857,
-  latitude: 24.328853,
-  zoom: 9.6,
-  pitch: 0,
-  bearing: 0,
+    longitude: 54.45857,
+    latitude: 24.328853,
+    zoom: 9.6,
+    pitch: 0,
+    bearing: 0,
 };
 
 const MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 const LUMA_PATCH_KEY = "__mosbLumaMaxTextureGuard__";
 if (typeof window !== "undefined" && !(window as any)[LUMA_PATCH_KEY]) {
-  (window as any)[LUMA_PATCH_KEY] = true;
-  if (
-    CanvasContext.prototype &&
-    typeof CanvasContext.prototype.getMaxDrawingBufferSize === "function"
-  ) {
-    const originalGetMax = CanvasContext.prototype.getMaxDrawingBufferSize;
-    CanvasContext.prototype.getMaxDrawingBufferSize = function getMaxDrawingBufferSize() {
-      const max = (this as any)?.device?.limits?.maxTextureDimension2D;
-      if (max && Number.isFinite(max)) {
-        return [max, max];
-      }
-      return originalGetMax.call(this);
-    };
-  }
+    (window as any)[LUMA_PATCH_KEY] = true;
+    if (
+        CanvasContext.prototype &&
+        typeof CanvasContext.prototype.getMaxDrawingBufferSize === "function"
+    ) {
+        const originalGetMax = CanvasContext.prototype.getMaxDrawingBufferSize;
+        CanvasContext.prototype.getMaxDrawingBufferSize = function getMaxDrawingBufferSize() {
+            const max = (this as any)?.device?.limits?.maxTextureDimension2D;
+            if (max && Number.isFinite(max)) {
+                return [max, max];
+            }
+            try {
+                return originalGetMax.call(this);
+            } catch {
+                // Safe fallback when device limits are unavailable.
+                return [4096, 4096];
+            }
+        };
+    }
 }
 
 function nowMs(): number {
-  return Date.now();
+    return Date.now();
 }
 
 type ArcDatum = {
-  leg_id: string;
-  mode: string;
-  source: [number, number];
-  target: [number, number];
+    leg_id: string;
+    mode: string;
+    source: [number, number];
+    target: [number, number];
 };
 
 export default function ClientOnlyMap() {
-  const geofences = useClientOnlyStore((s) => s.geofences);
-  const ui = useClientOnlyStore((s) => s.ui);
-  const locations = useClientOnlyStore((s) => s.locations);
-  const legs = useClientOnlyStore((s) => s.legs);
+    const geofences = useClientOnlyStore((s) => s.geofences);
+    const ui = useClientOnlyStore((s) => s.ui);
+    const locations = useClientOnlyStore((s) => s.locations);
+    const legs = useClientOnlyStore((s) => s.legs);
 
-  const events = useClientOnlyStore((s) =>
-    s.eventIds
-      .map((id) => s.eventsById[id])
-      .filter((event): event is AnnotatedEvent => Boolean(event)),
-  );
-  const shipments = useClientOnlyStore((s) => Object.values(s.shipmentsByNo));
+    const events = useClientOnlyStore((s) =>
+        s.eventIds
+            .map((id) => s.eventsById[id])
+            .filter((event): event is AnnotatedEvent => Boolean(event)),
+    );
+    const shipments = useClientOnlyStore((s) => Object.values(s.shipmentsByNo));
 
-  const [isMapReady, setIsMapReady] = useState(false);
-  const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
+    const [isMapReady, setIsMapReady] = useState(false);
+    const [viewState, setViewState] = useState(DEFAULT_VIEW);
+    const mapContainerRef = useRef<HTMLDivElement | null>(null);
+    const mapRef = useRef<maplibregl.Map | null>(null);
 
-  const maskExt = useMemo(() => new MaskExtension(), []);
+    const maskExt = useMemo(() => new MaskExtension(), []);
 
-  const sinceMs = useMemo(
-    () => nowMs() - ui.hoursWindow * 60 * 60 * 1000,
-    [ui.hoursWindow],
-  );
-
-  const heatPoints = useMemo(
-    () => buildHeatPoints(events, { sinceMs, eventType: ui.heatEventType, zoneId: "all" }),
-    [events, sinceMs, ui.heatEventType],
-  );
-
-  const etaWedges = useMemo(
-    () => computeEtaWedges(shipments, events, nowMs()),
-    [shipments, events],
-  );
-
-  const arcs = useMemo<ArcDatum[]>(() => {
-    if (!legs.length || !locations.length) return [];
-    const locMap = new Map(locations.map((loc) => [loc.location_id, loc]));
-    const result: ArcDatum[] = [];
-    for (const leg of legs) {
-      const from = locMap.get(leg.from_location_id);
-      const to = locMap.get(leg.to_location_id);
-      if (from && to) {
-        result.push({
-          leg_id: leg.leg_id,
-          mode: leg.mode,
-          source: [from.lon, from.lat] as [number, number],
-          target: [to.lon, to.lat] as [number, number],
-        });
-      }
-    }
-    return result;
-  }, [legs, locations]);
-
-  useEffect(() => {
-    const container = mapContainerRef.current;
-    if (!container || mapRef.current) return;
-
-    let active = true;
-    const map = new maplibregl.Map({
-      container,
-      style: MAP_STYLE,
-      center: [DEFAULT_VIEW.longitude, DEFAULT_VIEW.latitude],
-      zoom: DEFAULT_VIEW.zoom,
-      pitch: DEFAULT_VIEW.pitch,
-      bearing: DEFAULT_VIEW.bearing,
-    });
-
-    mapRef.current = map;
-
-    map.on("load", () => {
-      if (active) setIsMapReady(true);
-    });
-
-    map.on("error", (e) => {
-      console.error("MapLibre error:", e);
-      if (active) setIsMapReady(false);
-    });
-
-    return () => {
-      active = false;
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-      setIsMapReady(false);
-    };
-  }, []);
-
-  const layers = useMemo(() => {
-    const out: Layer[] = [];
-
-    if (geofences) {
-      if (ui.showGeofenceMask) {
-        out.push(
-          new GeoJsonLayer({
-            id: "geofence-mask",
-            data: geofences as any,
-            operation: "mask",
-            extensions: [maskExt],
-          }),
-        );
-      }
-
-      out.push(
-        new GeoJsonLayer({
-          id: "geofence-outline",
-          data: geofences as any,
-          stroked: true,
-          filled: false,
-          lineWidthMinPixels: 2,
-          getLineColor: (f: any) => {
-            const kind = f.properties?.kind;
-            const colors: Record<string, [number, number, number, number]> = {
-              MOSB: [255, 80, 80, 200],
-              WH: [140, 90, 255, 200],
-              PORT: [0, 160, 255, 200],
-              BERTH: [0, 200, 255, 200],
-              SITE: [255, 120, 80, 200],
-            };
-            return colors[kind] || [200, 200, 200, 180];
-          },
-        }),
-      );
-    }
-
-    if (ui.showHeatmap && heatPoints.length > 0) {
-      out.push(
-        new HeatmapLayer({
-          id: "heatmap",
-          data: heatPoints,
-          getPosition: (d: any) => d.position,
-          getWeight: (d: any) => d.weight,
-          aggregation: "SUM",
-          radiusPixels: 30,
-          intensity: 1.0,
-          threshold: 0.05,
-          debounceTimeout: 500,
-          colorRange: [
-            [0, 0, 255, 0],
-            [0, 255, 255, 128],
-            [0, 255, 0, 192],
-            [255, 255, 0, 224],
-            [255, 0, 0, 255],
-          ],
-        }),
-      );
-    }
-
-    if (ui.showEta && etaWedges.length > 0) {
-      out.push(
-        new SolidPolygonLayer({
-          id: "eta-wedges",
-          data: etaWedges,
-          getPolygon: (d: any) => d.polygon,
-          extruded: true,
-          getElevation: (d: any) => d.elevation_m,
-          getFillColor: [255, 140, 0, 120],
-          getLineColor: [255, 140, 0, 200],
-          lineWidthMinPixels: 1,
-          pickable: false,
-        }),
-      );
-    }
-
-    if (arcs.length) {
-      out.push(
-        new ArcLayer({
-          id: "legs",
-          data: arcs,
-          getSourcePosition: (d: any) => d.source,
-          getTargetPosition: (d: any) => d.target,
-          getSourceColor: (d: any) =>
-            d.mode === "SEA" ? [0, 160, 255, 180] :
-            d.mode === "AIR" ? [255, 200, 80, 180] :
-            [120, 200, 120, 180],
-          getTargetColor: (d: any) =>
-            d.mode === "SEA" ? [0, 160, 255, 180] :
-            d.mode === "AIR" ? [255, 200, 80, 180] :
-            [120, 200, 120, 180],
-          getWidth: 2,
-          pickable: false,
-        }),
-      );
-    }
-
-    out.push(
-      new ScatterplotLayer({
-        id: "events",
-        data: events,
-        getPosition: (d: any) => d.position,
-        getRadius: 30,
-        radiusUnits: "meters",
-        getFillColor: (d: any) => {
-          switch (d.event_type) {
-            case "enter":
-              return [0, 200, 0, 200];
-            case "exit":
-              return [220, 0, 0, 200];
-            default:
-              return [0, 120, 255, 160];
-          }
-        },
-        pickable: false,
-        extensions: ui.showGeofenceMask && geofences ? [maskExt] : [],
-        maskId: ui.showGeofenceMask && geofences ? "geofence-mask" : undefined,
-      }),
+    const sinceMs = useMemo(
+        () => nowMs() - ui.hoursWindow * 60 * 60 * 1000,
+        [ui.hoursWindow],
     );
 
-    if (locations.length) {
-      out.push(
-        new ScatterplotLayer({
-          id: "locations",
-          data: locations,
-          getPosition: (d: any) => [d.lon, d.lat],
-          getRadius: (d: any) => (d.type === "MOSB" ? 260 : 200),
-          getFillColor: (d: any) => {
-            const m: Record<string, [number, number, number, number]> = {
-              MOSB: [255, 80, 80, 230],
-              WH: [140, 90, 255, 220],
-              PORT: [0, 160, 255, 220],
-              BERTH: [0, 200, 255, 220],
-              SITE: [255, 120, 80, 220],
-            };
-            return m[d.type] || [160, 160, 160, 200];
-          },
-          pickable: false,
-        }),
-      );
+    const heatPoints = useMemo(
+        () => buildHeatPoints(events, { sinceMs, eventType: ui.heatEventType, zoneId: "all" }),
+        [events, sinceMs, ui.heatEventType],
+    );
 
-      out.push(
-        new TextLayer({
-          id: "location-labels",
-          data: locations,
-          getPosition: (d: any) => [d.lon, d.lat],
-          getText: (d: any) => d.name,
-          getSize: 12,
-          sizeUnits: "pixels",
-          getColor: [220, 230, 240, 220],
-          getPixelOffset: [0, 14],
-          getTextAnchor: "middle",
-          getAlignmentBaseline: "top",
-          pickable: false,
-        }),
-      );
-    }
+    const etaWedges = useMemo(
+        () => computeEtaWedges(shipments, events, nowMs()),
+        [shipments, events],
+    );
 
-    return out;
-  }, [
-    geofences,
-    events,
-    heatPoints,
-    etaWedges,
-    arcs,
-    locations,
-    ui.showGeofenceMask,
-    ui.showHeatmap,
-    ui.showEta,
-    maskExt,
-  ]);
+    const arcs = useMemo<ArcDatum[]>(() => {
+        if (!legs.length || !locations.length) return [];
+        const locMap = new Map(locations.map((loc) => [loc.location_id, loc]));
+        const result: ArcDatum[] = [];
+        for (const leg of legs) {
+            const from = locMap.get(leg.from_location_id);
+            const to = locMap.get(leg.to_location_id);
+            if (from && to) {
+                result.push({
+                    leg_id: leg.leg_id,
+                    mode: leg.mode,
+                    source: [from.lon, from.lat] as [number, number],
+                    target: [to.lon, to.lat] as [number, number],
+                });
+            }
+        }
+        return result;
+    }, [legs, locations]);
 
-  return (
-    <div style={{ position: "relative", width: "100%", height: "calc(100vh - 120px)" }}>
-      <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
-      {isMapReady && (
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-          <DeckGL initialViewState={DEFAULT_VIEW} controller={false} layers={layers} />
+    useEffect(() => {
+        const container = mapContainerRef.current;
+        if (!container || mapRef.current) return;
+
+        let active = true;
+        const map = new maplibregl.Map({
+            container,
+            style: MAP_STYLE,
+            center: [DEFAULT_VIEW.longitude, DEFAULT_VIEW.latitude],
+            zoom: DEFAULT_VIEW.zoom,
+            pitch: DEFAULT_VIEW.pitch,
+            bearing: DEFAULT_VIEW.bearing,
+        });
+
+        mapRef.current = map;
+
+        map.on("load", () => {
+            if (active) {
+                setIsMapReady(true);
+                // Initialize viewState from MapLibre
+                const center = map.getCenter();
+                setViewState({
+                    longitude: center.lng,
+                    latitude: center.lat,
+                    zoom: map.getZoom(),
+                    pitch: map.getPitch(),
+                    bearing: map.getBearing(),
+                });
+            }
+        });
+
+        // Sync DeckGL viewState with MapLibre on move
+        // Note: 'move' event fires on all view changes (pan, zoom, pitch, bearing)
+        // Use requestAnimationFrame to throttle updates and improve performance
+        let rafId: number | null = null;
+        const handleMove = () => {
+            if (!active || !map) return;
+            if (rafId !== null) return; // Skip if already scheduled
+
+            rafId = requestAnimationFrame(() => {
+                rafId = null;
+                if (!active || !map) return;
+                const center = map.getCenter();
+                setViewState({
+                    longitude: center.lng,
+                    latitude: center.lat,
+                    zoom: map.getZoom(),
+                    pitch: map.getPitch(),
+                    bearing: map.getBearing(),
+                });
+            });
+        };
+
+        map.on("move", handleMove);
+
+        map.on("error", (e) => {
+            console.error("MapLibre error:", e);
+            if (active) setIsMapReady(false);
+        });
+
+        return () => {
+            active = false;
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            if (mapRef.current) {
+                mapRef.current.off("move", handleMove);
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
+            setIsMapReady(false);
+        };
+    }, []);
+
+    const layers = useMemo(() => {
+        const out: Layer[] = [];
+
+        if (geofences) {
+            if (ui.showGeofenceMask) {
+                out.push(
+                    new GeoJsonLayer({
+                        id: "geofence-mask",
+                        data: geofences as any,
+                        operation: "mask",
+                        extensions: [maskExt],
+                    }),
+                );
+            }
+
+            out.push(
+                new GeoJsonLayer({
+                    id: "geofence-outline",
+                    data: geofences as any,
+                    stroked: true,
+                    filled: false,
+                    lineWidthMinPixels: 2,
+                    getLineColor: (f: any) => {
+                        const kind = f.properties?.kind;
+                        const colors: Record<string, [number, number, number, number]> = {
+                            MOSB: [255, 80, 80, 200],
+                            WH: [140, 90, 255, 200],
+                            PORT: [0, 160, 255, 200],
+                            BERTH: [0, 200, 255, 200],
+                            SITE: [255, 120, 80, 200],
+                        };
+                        return colors[kind] || [200, 200, 200, 180];
+                    },
+                }),
+            );
+        }
+
+        if (ui.showHeatmap && heatPoints.length > 0) {
+            out.push(
+                new HeatmapLayer({
+                    id: "heatmap",
+                    data: heatPoints,
+                    getPosition: (d: any) => d.position,
+                    getWeight: (d: any) => d.weight,
+                    aggregation: "SUM",
+                    radiusPixels: 30,
+                    intensity: 1.0,
+                    threshold: 0.05,
+                    debounceTimeout: 500,
+                    colorRange: [
+                        [0, 0, 255, 0],
+                        [0, 255, 255, 128],
+                        [0, 255, 0, 192],
+                        [255, 255, 0, 224],
+                        [255, 0, 0, 255],
+                    ],
+                }),
+            );
+        }
+
+        if (ui.showEta && etaWedges.length > 0) {
+            out.push(
+                new SolidPolygonLayer({
+                    id: "eta-wedges",
+                    data: etaWedges,
+                    getPolygon: (d: any) => d.polygon,
+                    extruded: true,
+                    getElevation: (d: any) => d.elevation_m,
+                    getFillColor: [255, 140, 0, 120],
+                    getLineColor: [255, 140, 0, 200],
+                    lineWidthMinPixels: 1,
+                    pickable: false,
+                }),
+            );
+        }
+
+        if (arcs.length) {
+            out.push(
+                new ArcLayer({
+                    id: "legs",
+                    data: arcs,
+                    getSourcePosition: (d: any) => d.source,
+                    getTargetPosition: (d: any) => d.target,
+                    getSourceColor: (d: any) =>
+                        d.mode === "SEA" ? [0, 160, 255, 180] :
+                            d.mode === "AIR" ? [255, 200, 80, 180] :
+                                [120, 200, 120, 180],
+                    getTargetColor: (d: any) =>
+                        d.mode === "SEA" ? [0, 160, 255, 180] :
+                            d.mode === "AIR" ? [255, 200, 80, 180] :
+                                [120, 200, 120, 180],
+                    getWidth: 2,
+                    pickable: false,
+                }),
+            );
+        }
+
+        out.push(
+            new ScatterplotLayer({
+                id: "events",
+                data: events,
+                getPosition: (d: any) => d.position,
+                getRadius: 30,
+                radiusUnits: "meters",
+                getFillColor: (d: any) => {
+                    switch (d.event_type) {
+                        case "enter":
+                            return [0, 200, 0, 200];
+                        case "exit":
+                            return [220, 0, 0, 200];
+                        default:
+                            return [0, 120, 255, 160];
+                    }
+                },
+                pickable: false,
+                extensions: ui.showGeofenceMask && geofences ? [maskExt] : [],
+                maskId: ui.showGeofenceMask && geofences ? "geofence-mask" : undefined,
+            }),
+        );
+
+        if (locations.length) {
+            out.push(
+                new ScatterplotLayer({
+                    id: "locations",
+                    data: locations,
+                    getPosition: (d: any) => [d.lon, d.lat],
+                    getRadius: (d: any) => (d.type === "MOSB" ? 260 : 200),
+                    getFillColor: (d: any) => {
+                        const m: Record<string, [number, number, number, number]> = {
+                            MOSB: [255, 80, 80, 230],
+                            WH: [140, 90, 255, 220],
+                            PORT: [0, 160, 255, 220],
+                            BERTH: [0, 200, 255, 220],
+                            SITE: [255, 120, 80, 220],
+                        };
+                        return m[d.type] || [160, 160, 160, 200];
+                    },
+                    pickable: false,
+                }),
+            );
+
+            out.push(
+                new TextLayer({
+                    id: "location-labels",
+                    data: locations,
+                    getPosition: (d: any) => [d.lon, d.lat],
+                    getText: (d: any) => d.name,
+                    getSize: 12,
+                    sizeUnits: "pixels",
+                    getColor: [220, 230, 240, 220],
+                    getPixelOffset: [0, 14],
+                    getTextAnchor: "middle",
+                    getAlignmentBaseline: "top",
+                    pickable: false,
+                }),
+            );
+        }
+
+        return out;
+    }, [
+        geofences,
+        events,
+        heatPoints,
+        etaWedges,
+        arcs,
+        locations,
+        ui.showGeofenceMask,
+        ui.showHeatmap,
+        ui.showEta,
+        maskExt,
+    ]);
+
+    return (
+        <div style={{ position: "relative", width: "100%", height: "calc(100vh - 120px)" }}>
+            <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
+            {isMapReady && (
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                    <DeckGL viewState={viewState} controller={false} layers={layers} />
+                </div>
+            )}
+            <div
+                style={{
+                    position: "absolute",
+                    inset: 0,
+                    pointerEvents: "none",
+                    background:
+                        "radial-gradient(120% 120% at 20% 20%, rgba(255,255,255,0.06), rgba(0,0,0,0.15) 60%, rgba(0,0,0,0.4) 100%)",
+                }}
+            />
         </div>
-      )}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          background:
-            "radial-gradient(120% 120% at 20% 20%, rgba(255,255,255,0.06), rgba(0,0,0,0.15) 60%, rgba(0,0,0,0.4) 100%)",
-        }}
-      />
-    </div>
-  );
+    );
 }

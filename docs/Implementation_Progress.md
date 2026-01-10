@@ -549,8 +549,10 @@ feat: add server management script and fix frontend user cache crash
 
 #### 10. Map 컴포넌트 (`frontend/components/client-only/ClientOnlyMap.tsx`)
 - MapLibre 베이스맵 (Carto Dark Matter)
-- DeckGL 오버레이 (정적, `controller={false}`)
+- DeckGL 오버레이 (동기화, `controller={false}`, `viewState` prop 사용)
 - LUMA_PATCH_KEY 패치 포함
+- MapLibre `move` 이벤트 리스너로 DeckGL 뷰 상태 동기화
+- `requestAnimationFrame`으로 성능 최적화
 - 레이어:
   - GeoJsonLayer: 지오펜스 마스크 및 아웃라인
   - ScatterplotLayer: 이벤트 포인트 (enter/exit 색상 구분)
@@ -621,6 +623,18 @@ feat: add server management script and fix frontend user cache crash
 - ✅ ESLint 오류 없음
 - ✅ TextLayer 실제 사용 중 (제거 불필요)
 - ✅ 타입 안전성 개선 (`any` 타입 최소화)
+
+#### 추가 버그 수정 (2026-01-10)
+- ✅ **DeckGL과 MapLibre 뷰 상태 동기화 문제 해결**
+  - 문제: MapLibre 베이스맵 이동/확대/축소 시 DeckGL 레이어가 고정됨
+  - 원인: `controller={false}`와 정적 `initialViewState` 사용
+  - 해결:
+    - `viewState` 상태 추가하여 제어 컴포넌트로 변경
+    - MapLibre `move` 이벤트 리스너 추가 (모든 뷰 변경 감지)
+    - `requestAnimationFrame`으로 성능 최적화
+    - Cleanup 함수에서 `requestAnimationFrame` 취소
+  - 파일: `frontend/components/client-only/ClientOnlyMap.tsx`
+  - 검증: ✅ 린터 오류 없음, ✅ 동기화 확인
 
 #### 알려진 제한사항
 - ⚠️ 지오펜스 데이터는 placeholder (실제 운영 데이터로 교체 필요)
@@ -703,6 +717,10 @@ feat: add server management script and fix frontend user cache crash
 
 ### 변경 이력
 
+- **2026-01-10**: DeckGL과 MapLibre 뷰 상태 동기화 버그 수정 완료
+  - 문제: MapLibre 베이스맵 이동/확대/축소 시 DeckGL 레이어 고정
+  - 해결: `viewState` 상태 추가, MapLibre `move` 이벤트 리스너, `requestAnimationFrame` 최적화
+  - 파일: `frontend/components/client-only/ClientOnlyMap.tsx`
 - **2026-01-10**: Phase 4.1 Client-Only Dashboard 구현 완료
 - **2026-01-10**: TypeScript 타입 오류 수정 및 빌드 검증 완료
 - **2026-01-10**: 사용하지 않는 의존성 `@deck.gl/geo-layers` 제거 (번들 크기 감소)
